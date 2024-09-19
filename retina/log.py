@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import sys
 from typing import Callable, Union, Optional
+
 import numpy.typing as npt
 
 from retina.size import Point, Rectangle
