@@ -1,32 +1,61 @@
-from typing import Callable
+import argparse
+from typing import Callable, ClassVar
 import cv2 as cv
 import sys
 
 import numpy as np
 from retina.size import *
 
-def debugshow(img: cv.typing.MatLike, *, window_name:str = "Debug"):
-  cv.imshow(window_name, img)
-  cv.waitKey(0)
-
 IS_PREVIEW = "--preview" in sys.argv
 IS_SAVE = "--save" in sys.argv
-PREVIEW_HEIGHT = 600
+
+  
 
 def wait_until_esc():
   while (cv.waitKey(5) != 27): pass
+@dataclass
+class ImagePostProcessHandler:
+  is_preview: bool
+  is_save: bool
+  is_pipe: bool
+  PREVIEW_HEIGHT: ClassVar[int] = 600
 
-def finish_process(after: cv.typing.MatLike, before: Optional[cv.typing.MatLike] = None, path: Optional[str] = None, *, force_preview: bool = False, force_save: bool = False):
-  if IS_PREVIEW or force_preview:
-    after_dimensions = Dimension.from_shape(after.shape).resize(height=PREVIEW_HEIGHT).tuple
-    cv.imshow("After", cv.resize(after, after_dimensions, interpolation=cv.INTER_CUBIC))
-    if before is not None:
-      before_dimensions = Dimension.from_shape(before.shape).resize(height=PREVIEW_HEIGHT).tuple
-      cv.imshow("Before", cv.resize(before, before_dimensions, interpolation=cv.INTER_CUBIC))
-    wait_until_esc()
+  @staticmethod
+  def argparse():
+    parser = argparse.ArgumentParser(
+      prog="Image Processing Module",
+      description="This script is used to perform a series of operations on the provided dataset",
+    )
+    parser.add_argument("--preview", dest="is_preview", action="store_const", default=False, const=True, help="The presence of this flag causes the image processing results to be previewed via a window")
+    parser.add_argument("--save", dest="is_save", action="store_const", default=False, const=True, help="The presence of this flag forces the image processing results to save the results")
+    parser.add_argument("--pipe", dest="is_pipe", action="store_const", default=False, const=True, help="The presence of this flag indicates that if any processing step exists prior to this step. It should be executed first")
+    args = parser.parse_args()
 
-  if (IS_SAVE or force_save) and path is not None:
-    cv.imwrite(path, after)
+    return ImagePostProcessHandler(
+      is_preview=args.is_preview,
+      is_save=args.is_save,
+      is_pipe=args.is_pipe,
+    )
+
+  def finish(
+    self,
+    after: cv.typing.MatLike, before: Optional[cv.typing.MatLike] = None,
+    path: Optional[str] = None,
+    *,
+    force_preview: bool = False,
+    force_save: bool = False
+  ):
+    if IS_PREVIEW or force_preview:
+      after_dimensions = Dimension.from_shape(after.shape).resize(height=ImagePostProcessHandler.PREVIEW_HEIGHT).tuple
+      cv.imshow("After", cv.resize(after, after_dimensions, interpolation=cv.INTER_CUBIC))
+      if before is not None:
+        before_dimensions = Dimension.from_shape(before.shape).resize(height=ImagePostProcessHandler.PREVIEW_HEIGHT).tuple
+        cv.imshow("Before", cv.resize(before, before_dimensions, interpolation=cv.INTER_CUBIC))
+      wait_until_esc()
+
+    if (IS_SAVE or force_save) and path is not None:
+      cv.imwrite(path, after)
+
     
 def splice_matrix(dest: cv.typing.MatLike, src: cv.typing.MatLike, rect: Rectangle):
   dest_rect = rect.clamp(Dimension.from_shape(dest.shape))

@@ -1,18 +1,20 @@
 import os
 import sys
+sys.path.append(os.getcwd())
 
 import retina.debug
 from retina.log import Ansi
 from retina.size import FACE_DIMENSIONS
-sys.path.append(os.getcwd())
 import retina
 import cv2 as cv
 import tqdm
 
-if "--pipe" in sys.argv:
+handler = retina.cvutil.ImagePostProcessHandler.argparse()
+if handler.is_pipe:
   import scripts.unzip
 
 files = retina.filesys.get_files_in_folder(retina.filesys.PLAYGROUND_PATH)
+removed_paths = []
 for idx, file_path in enumerate(tqdm.tqdm(files, desc="Transforming Images")):
   original = cv.imread(file_path)
   
@@ -30,7 +32,7 @@ for idx, file_path in enumerate(tqdm.tqdm(files, desc="Transforming Images")):
   )
 
   img = retina.debug.draw_rectangles(img, face_positions)
-  retina.cvutil.finish_process(img, before=original)
+  handler.finish(img, before=original)
 
   for i in range(len(faces)):
     face = faces[i]
@@ -45,10 +47,13 @@ for idx, file_path in enumerate(tqdm.tqdm(files, desc="Transforming Images")):
         break
 
     if not is_overlapping:
-      retina.cvutil.finish_process(face, before=img, path=file_path)
+      handler.finish(face, before=img, path=file_path)
   
   if len(faces) == 0:
-    print(f"{Ansi.Error}Removed {file_path} because it doesn't contain any faces!{Ansi.End}")
-    os.remove(file_path)
+    removed_paths.append(file_path)
+
+for path in removed_paths:
+  print(f"{Ansi.Error}Removed {path} because it doesn't contain any faces!{Ansi.End}")
+  os.remove(path)
 
   

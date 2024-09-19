@@ -21,39 +21,45 @@ class VirtualEnvPath:
   pip_sync: str
   activate: str
 
+  @property
+  def activate_venv(self)->Sequence[str]:
+    try:
+      os.chmod(self.activate, 0o744)
+    except Exception as e:
+      print(e)
+    filename = os.path.basename(self.activate)
+    if filename.endswith('.bat'):
+      return [self.activate]
+    else:
+      return ['bash', self.activate]
+
   @staticmethod
-  def create(name: str):
+  def detect_venv(name: str):
+    '''This function should be run only after a virtual environment has been created'''
     VIRTUALENV_SCRIPTS = os.path.join(name, "Scripts")
     VIRTUALENV_BIN = os.path.join(name, "bin")
-
-    path: str
-    activate_script: str
-    pip_compile_script: str
-    pip_sync_script: str
-    if sys.platform == "windows":
-      path = VIRTUALENV_SCRIPTS
-      activate_script = "activate.bat"
-      pip_compile_script = "pip-compile.exe"
-      pip_sync_script = "pip-sync.exe"
-    else:
+    if os.path.exists(VIRTUALENV_BIN):
       path = VIRTUALENV_BIN
-      activate_script = "activate"
-      pip_compile_script = "pip-compile"
-      pip_sync_script = "pip-sync"
-
-    return VirtualEnvPath(
-      name=name,
-      path=path,
-      python=os.path.join(path, PYTHON_NAME),
-      pip=os.path.join(path, PIP_NAME),
-      pip_compile=os.path.join(path, pip_compile_script),
-      pip_sync=os.path.join(path, pip_sync_script),
-      activate=os.path.join(path, activate_script)
-    )
-
-
-def run_bash_script(params: Sequence[str]):
-  if sys.platform == 'windows':
-    return params
-  else:
-    return ['bash', *params]
+      return VirtualEnvPath(
+        name=name,
+        path=path,
+        python=os.path.join(path, PYTHON_NAME),
+        pip=os.path.join(path, PIP_NAME),
+        pip_compile=os.path.join(path, "pip-compile"),
+        pip_sync=os.path.join(path, "pip-sync"),
+        activate=os.path.join(path, "activate"),
+      )
+  
+    if os.path.exists(VIRTUALENV_SCRIPTS):
+      path = VIRTUALENV_SCRIPTS
+      return VirtualEnvPath(
+        name=name,
+        path=path,
+        python=os.path.join(path, PYTHON_NAME),
+        pip=os.path.join(path, PIP_NAME),
+        pip_compile=os.path.join(path, "pip-compile.exe"),
+        pip_sync=os.path.join(path, "pip-sync.exe"),
+        activate=os.path.join(path, "activate.bat"),
+      )
+    
+    raise Exception("Unable to detect any supported virtual-env installation in the local computer.")

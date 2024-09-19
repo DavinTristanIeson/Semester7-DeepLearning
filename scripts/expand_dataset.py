@@ -1,12 +1,13 @@
 import os
 import sys
+sys.path.append(os.getcwd())
 
 import tqdm
-sys.path.append(os.getcwd())
 import retina
 import cv2 as cv
 
-if "--pipe" in sys.argv:
+handler = retina.cvutil.ImagePostProcessHandler.argparse()
+if handler.is_pipe:
   import scripts.preprocess
 
 def namefile(prefix: str, file_path: str):
@@ -21,7 +22,7 @@ for idx, file_path in enumerate(tqdm.tqdm(files, desc="Expanding Dataset")):
   original = cv.imread(file_path)
 
   flipped = cv.flip(original, 1)
-  retina.cvutil.finish_process(flipped, before=original, path=namefile(f"FlipHorizontal", file_path))
+  handler.finish(flipped, before=original, path=namefile(f"FlipHorizontal", file_path))
     
       
 

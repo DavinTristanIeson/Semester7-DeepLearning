@@ -1,7 +1,9 @@
 import os
 import sys
+
 sys.path.append(os.getcwd())
 
+from retina.log import Ansi
 import subprocess
 import argparse
 import scripts.config
@@ -17,17 +19,17 @@ args = parser.parse_args()
 if not os.path.exists(scripts.config.VIRTUALENV_NAME):
   subprocess.run([scripts.config.PYTHON_NAME, "-m", "venv", scripts.config.VIRTUALENV_NAME], check=True)
 
-venvpaths = scripts.config.VirtualEnvPath.create(scripts.config.VIRTUALENV_NAME)
-os.chmod(venvpaths.activate, 0o744)
-subprocess.run(scripts.config.run_bash_script([venvpaths.activate]), check=True)
+venvpaths = scripts.config.VirtualEnvPath.detect_venv(scripts.config.VIRTUALENV_NAME)
+subprocess.run(venvpaths.activate_venv, check=True)
+
 
 if args.is_install:
   if not os.path.exists(venvpaths.pip_compile) or not os.path.exists(venvpaths.pip_sync):
-    print(f"Found no existing pip-tools installation. Installing them from PyPy...")
+    print(f"{Ansi.Warning}Found no existing pip-tools installation. Installing them from PyPy...{Ansi.End}")
     subprocess.run([venvpaths.pip, "install", "pip-tools"], check=True)
   subprocess.run([venvpaths.pip_compile, scripts.config.REQUIREMENTS_PATH, "-o", scripts.config.REQUIREMENTS_LOCK_PATH, "--verbose"])
   subprocess.run([venvpaths.pip_sync, scripts.config.REQUIREMENTS_LOCK_PATH, "--verbose"])
 else:
-  print(f"WARNING: If this is your first time running this project, please run python scripts/setup.py --install.")
+  print(f"{Ansi.Warning}WARNING: If this is your first time running this project, please run python scripts/setup.py --install.{Ansi.End}")
 
 
