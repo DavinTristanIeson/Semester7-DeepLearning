@@ -12,5 +12,5 @@ files = retina.filesys.get_files_in_folder(retina.filesys.PLAYGROUND_PATH) +\
   retina.filesys.get_files_in_folder(retina.filesys.TRAINING_PATH) +\
   retina.filesys.get_files_in_folder(retina.filesys.TESTING_PATH)
 
-for image in retina.cvutil.collage_images(files, Dimension(6, 5)):
+for image in retina.debug.collage_images(files, Dimension(6, 5)):
   retina.cvutil.finish_process(image, force_preview=True)

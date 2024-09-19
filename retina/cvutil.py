@@ -9,7 +9,6 @@ def debugshow(img: cv.typing.MatLike, *, window_name:str = "Debug"):
   cv.imshow(window_name, img)
   cv.waitKey(0)
 
-IS_SAMPLE = "--sample" in sys.argv
 IS_PREVIEW = "--preview" in sys.argv
 IS_SAVE = "--save" in sys.argv
 PREVIEW_HEIGHT = 600
@@ -28,7 +27,6 @@ def finish_process(after: cv.typing.MatLike, before: Optional[cv.typing.MatLike]
 
   if (IS_SAVE or force_save) and path is not None:
     cv.imwrite(path, after)
-
     
 def splice_matrix(dest: cv.typing.MatLike, src: cv.typing.MatLike, rect: Rectangle):
   dest_rect = rect.clamp(Dimension.from_shape(dest.shape))
@@ -46,7 +44,6 @@ def mask_matrix(dest: cv.typing.MatLike, src: cv.typing.MatLike, rect: Rectangle
   dest_mask = np.zeros(dest.shape, dtype=bool)
   dest_mask[dest_rect.slice] = src_mask
   return dest_mask
-
 
 class MaskingCanvasState:
   canvas: cv.typing.MatLike
@@ -101,17 +98,3 @@ class SelectionCanvasState:
     while (cv.waitKey(5) != 27):
       cv.imshow(window_name, self.canvas)
     return self._selection
-
-def collage_images(files: Sequence[Union[str, cv.typing.MatLike]], arrangement: Dimension, size: Dimension = Dimension.sized(64)):
-  for i in range(0, len(files), arrangement.area):
-    displayed = [cv.resize(cv.imread(path) if isinstance(path, str) else path, size.tuple) for path in files[i:i+arrangement.area]]
-    while len(displayed) < arrangement.area:
-      displayed.append(np.zeros((*size.tuple, 3), dtype=np.uint8))
-
-    rows = []
-    for j in range(0, len(displayed), arrangement.width):
-      row_proto = displayed[j:j+arrangement.width]
-      row = np.concatenate(row_proto, axis=1)
-      rows.append(row)
-    image = np.concatenate(rows, axis=0)
-    yield image

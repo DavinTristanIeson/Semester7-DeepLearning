@@ -5,4 +5,6 @@ import retina.cvutil as cvutil
 import retina.morphology as morphology
 import retina.size as size
 import retina.log as log
+import retina.debug as debug
 import retina.math as math
+import retina.face as face

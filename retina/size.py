@@ -199,16 +199,18 @@ class Rectangle:
     )
   def translate(self, dx: int, dy: int)->"Rectangle":
     return Rectangle(self.x0 + dx, self.y0 + dy, self.x1 + dx, self.y1 + dy)
-  def intersection_area(self, other: "Rectangle")->float:
+  def intersection(self, other: "Rectangle")->"Rectangle":
     # https://machinelearningspace.com/intersection-over-union-iou-a-comprehensive-guide/
     return Rectangle(
       max(self.x0, other.x0),
       max(self.y0, other.y0),
       min(self.x1, other.x1),
       min(self.y1, other.y1),
-    ).area
-  def union_area(self, other: "Rectangle")->float:
-    return self.area + other.area - self.intersection_area(other)
+    )
+  def intersection_with_union(self, other: "Rectangle")->"float":
+    intersection_area = self.intersection(other).area
+    union_area = self.area + other.area - intersection_area
+    return intersection_area / union_area
 
   @staticmethod
   def around(pt: Point, dimension: Dimension)->"Rectangle":
@@ -231,6 +233,7 @@ class Rectangle:
     return Rectangle(tuple[0], tuple[1], tuple[0] + tuple[2], tuple[1] + tuple[3])
 
 STANDARD_DIMENSIONS = Dimension(240, 240)
+FACE_DIMENSIONS = Dimension(32, 32)
 ANALYSIS_DIMENSIONS = Dimension.sized(15)
 
 def resize_image(img: cv.typing.MatLike, target_dims: Dimension):
@@ -252,4 +255,4 @@ def translate_image(img: cv.typing.MatLike, vector: tuple[float, float]):
   # https://www.geeksforgeeks.org/image-translation-using-opencv-python/
   dims = Dimension.from_shape(img.shape)    
   T = np.array([[1, 0, vector[0]], [0, 1, vector[1]]], dtype=np.float32) 
-  return cv.warpAffine(img, T, dims.tuple) 
+  return cv.warpAffine(img, T, dims.tuple)
