@@ -4,7 +4,6 @@ sys.path.append(os.getcwd())
 
 import subprocess
 import argparse
-from retina.log import Ansi
 import scripts.config
 
 
@@ -16,19 +15,19 @@ parser.add_argument("--install", dest="is_install", action="store_const", defaul
 args = parser.parse_args()
 
 if not os.path.exists(scripts.config.VIRTUALENV_NAME):
-  subprocess.run(["python", "-m", "venv", scripts.config.VIRTUALENV_NAME], check=True)
+  subprocess.run([scripts.config.PYTHON_NAME, "-m", "venv", scripts.config.VIRTUALENV_NAME], check=True)
 
-subprocess.run([os.path.join(scripts.config.VIRTUALENV_SCRIPTS, "activate.bat")], check=True)
+venvpaths = scripts.config.VirtualEnvPath.create(scripts.config.VIRTUALENV_NAME)
+os.chmod(venvpaths.activate, 0o744)
+subprocess.run(scripts.config.run_bash_script([venvpaths.activate]), check=True)
 
 if args.is_install:
-  PIP_COMPILE = os.path.join(scripts.config.VIRTUALENV_SCRIPTS, "pip-compile.exe")
-  PIP_SYNC = os.path.join(scripts.config.VIRTUALENV_SCRIPTS, "pip-sync.exe")
-  if not os.path.exists(PIP_COMPILE) or not os.path.exists(PIP_SYNC):
-    print(f"{Ansi.Error}Found no existing pip-tools installation. Installing them from PyPy...{Ansi.End}")
-    subprocess.run([scripts.config.VENVPIP, "install", "pip-tools"], check=True)
-  subprocess.run([PIP_COMPILE, scripts.config.REQUIREMENTS_PATH, "-o", scripts.config.REQUIREMENTS_LOCK_PATH, "--verbose"])
-  subprocess.run([PIP_SYNC, scripts.config.REQUIREMENTS_LOCK_PATH, "--verbose"])
+  if not os.path.exists(venvpaths.pip_compile) or not os.path.exists(venvpaths.pip_sync):
+    print(f"Found no existing pip-tools installation. Installing them from PyPy...")
+    subprocess.run([venvpaths.pip, "install", "pip-tools"], check=True)
+  subprocess.run([venvpaths.pip_compile, scripts.config.REQUIREMENTS_PATH, "-o", scripts.config.REQUIREMENTS_LOCK_PATH, "--verbose"])
+  subprocess.run([venvpaths.pip_sync, scripts.config.REQUIREMENTS_LOCK_PATH, "--verbose"])
 else:
-  print(f"{Ansi.Warning}WARNING: If this is your first time running this project, please run python scripts/setup.py --install.{Ansi.End}")
+  print(f"WARNING: If this is your first time running this project, please run python scripts/setup.py --install.")
 
 
