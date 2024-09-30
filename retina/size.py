@@ -87,6 +87,8 @@ class Dimension:
   def at_edge(self, point: Point, *, cell = False)->bool:
     offset = -1 if cell else 0
     return point.x == 0 or point.x == self.width + offset or point.y == 0 or point.y == self.height + offset
+  def scale(self, scale: float)->"Dimension":
+    return Dimension(int(self.width * scale), int(self.height * scale))
   
   @staticmethod
   def blerp(image: npt.NDArray, dimensions: "Dimension")->npt.NDArray:
