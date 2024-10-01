@@ -1,3 +1,4 @@
 temp
 Venv
 __pycache__
+*.zip
