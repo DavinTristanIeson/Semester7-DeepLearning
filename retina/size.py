@@ -235,26 +235,6 @@ class Rectangle:
     return Rectangle(tuple[0], tuple[1], tuple[0] + tuple[2], tuple[1] + tuple[3])
 
 STANDARD_DIMENSIONS = Dimension(240, 240)
+PREVIEW_DIMENSIONS = Dimension(500, 500)
 FACE_DIMENSIONS = Dimension(32, 32)
-ANALYSIS_DIMENSIONS = Dimension.sized(15)
 
-def resize_image(img: cv.typing.MatLike, target_dims: Dimension):
-  dimensions = Dimension(img.shape[1], img.shape[0])\
-    .resize(width=target_dims.width, height=target_dims.height)
-  img = cv.resize(img, dimensions.tuple, interpolation=cv.INTER_LINEAR)
-  dimensions = Dimension(img.shape[1], img.shape[0])
-  rectangle = Rectangle.around(dimensions.center, target_dims)
-  return img[rectangle.slice]
-
-def rotate_image(img: cv.typing.MatLike, angle: float):
-  dims = Dimension.from_shape(img.shape)
-  center = dims.center
-  rot_mat = cv.getRotationMatrix2D(center.tuple, angle, 1.0)
-  result = cv.warpAffine(img, rot_mat, dims.tuple, flags=cv.INTER_LINEAR)
-  return result
-
-def translate_image(img: cv.typing.MatLike, vector: tuple[float, float]):
-  # https://www.geeksforgeeks.org/image-translation-using-opencv-python/
-  dims = Dimension.from_shape(img.shape)    
-  T = np.array([[1, 0, vector[0]], [0, 1, vector[1]]], dtype=np.float32) 
-  return cv.warpAffine(img, T, dims.tuple)
