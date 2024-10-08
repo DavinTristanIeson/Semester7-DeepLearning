@@ -9,7 +9,7 @@ from retina import log
 
 @lru_cache(maxsize=1)
 def get_clahe():
-  return cv.createCLAHE(tileGridSize=(16, 16), clipLimit=2.0)
+  return cv.createCLAHE(tileGridSize=(4, 4), clipLimit=2.0)
 
 def clahe(img: cv.typing.MatLike):
   clahe = get_clahe()

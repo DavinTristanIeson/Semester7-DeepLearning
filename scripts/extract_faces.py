@@ -1,5 +1,7 @@
 import os
 import sys
+from typing import Sequence
+
 sys.path.append(os.getcwd())
 
 import shutil
@@ -9,6 +11,7 @@ import tqdm
 import cv2 as cv
 
 import retina
+from retina.size import Point
 
 TEMP_ORIGINAL_PATH = os.path.join(retina.filesys.PLAYGROUND_PATH, 'original')
 TEMP_RESULT_PATH = os.path.join(retina.filesys.PLAYGROUND_PATH, 'results')
@@ -54,10 +57,14 @@ for file_path in tqdm.tqdm(retina.filesys.get_files_in_folder(TEMP_ORIGINAL_PATH
 
   for idx, face in enumerate(saved_faces):
     retina.debug.imdebug(retina.cvutil.resize_image(face, retina.size.FACE_DIMENSIONS))
-    face = retina.cvutil.resize_image(face, retina.size.Dimension(128, 128))
-    face = retina.convolution.gabor(face)
+    # face = retina.cvutil.resize_image(face, retina.size.Dimension(256, 256))
+    # face = retina.convolution.gabor(face)
     face = retina.cvutil.resize_image(face, retina.size.FACE_DIMENSIONS)
-    # retina.debug.imdebug(face)
+    face = cv.filter2D(face, -1, retina.convolution.GAUSSIAN_3X3_KERNEL)
+    face = cv.filter2D(face, -1, retina.convolution.SHARPEN_KERNEL)
+    face_landmarks = retina.face.face_landmark_detection(face)
+
+    retina.debug.imdebug(retina.face.draw_face_landmarks(face, face_landmarks))
     saved_faces[idx] = face
 
   filename = os.path.basename(file_path)

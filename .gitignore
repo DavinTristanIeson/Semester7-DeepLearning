@@ -3,3 +3,4 @@ Venv
 __pycache__
 *.zip
 data
+lbfmodel.yaml

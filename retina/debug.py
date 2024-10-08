@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import sys
 from typing import Callable, Iterable, Sequence, Union, Optional
 import numpy as np
 import numpy.typing as npt
@@ -8,6 +9,8 @@ import retina
 from retina.size import PREVIEW_DIMENSIONS, Dimension, Point, Rectangle, STANDARD_DIMENSIONS
 from retina.log import Ansi
 import matplotlib.pyplot as plt
+
+IS_QUIET = "--quiet" in sys.argv
 
 
 @dataclass
@@ -43,6 +46,8 @@ def draw_rectangles(img: cv.typing.MatLike, rectangles: Iterable[Rectangle]):
   return img
 
 def imdebug(img: cv.typing.MatLike):
+  if IS_QUIET:
+    return
   dimensions = Dimension.from_shape(img.shape).resize(height=PREVIEW_DIMENSIONS.height)
   cv.imshow("Debug", cv.resize(img, dimensions.tuple, interpolation=cv.INTER_CUBIC))
   retina.cvutil.wait_until_esc()

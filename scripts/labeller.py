@@ -9,12 +9,17 @@ import cv2 as cv
 TEMP_RESULT_PATH = os.path.join(retina.filesys.PLAYGROUND_PATH, 'results')
 
 LABELS = [
-  "Very Positive",
-  "Positive",
+  "Happy",
+  "Angry",
+  "Surprise",
+  "Disgust",
+  "Sad",
   "Neutral",
-  "Negative"
 ]
 
+if not os.path.exists(retina.filesys.DATA_PATH):
+  os.mkdir(retina.filesys.DATA_PATH)
+  
 for label in LABELS:
   folder_path = os.path.join(retina.filesys.DATA_PATH, label)
   if not os.path.exists(folder_path):

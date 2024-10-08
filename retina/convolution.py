@@ -87,7 +87,7 @@ def gabor_kernel():
 
   filters = []
   num_filters = 16
-  ksize = 35 # The local area to evaluate
+  ksize = 64 # The local area to evaluate
   sigma = 3.0  # Larger Values produce more edges
   lambd = 10.0
   gamma = 0.5

@@ -233,8 +233,11 @@ class Rectangle:
   @staticmethod
   def from_tuple(tuple: Sequence[int])->"Rectangle":
     return Rectangle(tuple[0], tuple[1], tuple[0] + tuple[2], tuple[1] + tuple[3])
+  @property
+  def tuple(self)->tuple[int,int,int,int]:
+    return (self.x0, self.y0, self.width, self.height)
 
 STANDARD_DIMENSIONS = Dimension(240, 240)
 PREVIEW_DIMENSIONS = Dimension(500, 500)
-FACE_DIMENSIONS = Dimension(32, 32)
+FACE_DIMENSIONS = Dimension(48, 48)
 
