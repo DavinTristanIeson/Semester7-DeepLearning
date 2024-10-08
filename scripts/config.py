@@ -1,7 +1,16 @@
 import os
-import sys
+import subprocess
 from dataclasses import dataclass
 from typing import Sequence
+
+class Ansi:
+  Error = '\033[91m'
+  Success = '\033[92m'
+  Warning = '\033[93m'
+  End = '\033[0m'
+  Grey = "\033[38;5;243m"
+  Bold = "\033[1m"
+  Underline = "\033[4m"
 
 # Virtual Environment
 VIRTUALENV_NAME = "Venv"
@@ -63,3 +72,16 @@ class VirtualEnvPath:
       )
     
     raise Exception("Unable to detect any supported virtual-env installation in the local computer.")
+  
+  @staticmethod
+  def create_venv(name: str):
+    global PYTHON_NAME, PIP_NAME
+    try:
+      subprocess.run([PYTHON_NAME, "-m", "venv", name], check=True)
+    except subprocess.CalledProcessError as e:
+      print(f"{Ansi.Warning}python3 alias not found, testing regular python command{Ansi.End}")
+      PYTHON_NAME = "python"
+      PIP_NAME = "pip"
+      # Try again
+      subprocess.run([PYTHON_NAME, "-m", "venv", name], check=True)
+      

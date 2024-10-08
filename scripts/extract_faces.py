@@ -24,14 +24,13 @@ for file_path in tqdm.tqdm(retina.filesys.get_files_in_folder(TEMP_ORIGINAL_PATH
   
   # Perform transformation here
   img = retina.cvutil.resize_image(original, retina.size.STANDARD_DIMENSIONS) # Resize
-  brightness = retina.colors.get_autobrightness_values(img)
-  img = retina.colors.contrast(img, 1, brightness)
   img = cv.cvtColor(img, cv.COLOR_BGR2GRAY) # Grayscale
+  img = retina.colors.clahe(img) # Contrast adjustment
 
   # img, _ = retina.convolution.sobel(img)
   face_positions = retina.face.haar_detect(img)
   faces = tuple(
-    retina.cvutil.resize_image(img[pos.slice], retina.size.FACE_DIMENSIONS)
+    img[pos.slice]
     for pos in face_positions
   )
 
@@ -53,12 +52,19 @@ for file_path in tqdm.tqdm(retina.filesys.get_files_in_folder(TEMP_ORIGINAL_PATH
     if not is_overlapping:
       saved_faces.append(face)
 
+  for idx, face in enumerate(saved_faces):
+    retina.debug.imdebug(retina.cvutil.resize_image(face, retina.size.FACE_DIMENSIONS))
+    face = retina.cvutil.resize_image(face, retina.size.Dimension(128, 128))
+    face = retina.convolution.gabor(face)
+    face = retina.cvutil.resize_image(face, retina.size.FACE_DIMENSIONS)
+    # retina.debug.imdebug(face)
+    saved_faces[idx] = face
+
   filename = os.path.basename(file_path)
   filename, fileext = os.path.splitext(filename)
-  for idx, face in enumerate(saved_faces):
+  for idx, face in enumerate(saved_faces):    
     result_filename = filename + (str(idx) if idx > 0 else '') + fileext
     result_path = os.path.join(TEMP_RESULT_PATH, result_filename)
     cv.imwrite(result_path, face)
-
 
 
