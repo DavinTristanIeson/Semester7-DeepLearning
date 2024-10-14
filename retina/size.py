@@ -6,6 +6,18 @@ import retina.math
 import math
 import cv2 as cv
 
+
+@dataclass
+class FloatingPoint:
+  x:float
+  y:float
+  @property
+  def tuple(self)->tuple[float, float]:
+    return (self.x, self.y)
+  @staticmethod
+  def from_tuple(src: Tuple[int, int])->"Point":
+    return Point(src[0], src[1])
+
 @dataclass
 class Point:
   x: int
@@ -38,11 +50,12 @@ class Point:
     if isinstance(value, Point):
       return self.x == value.x and self.y == value.y
     return False
-  @staticmethod
-  def from_tuple(src: Tuple[int, int])->"Point":
-    return Point(src[0], src[1])
   def radians_to(self, point: "Point"):
     return np.arctan2(point.x - self.x, point.y - self.y)
+  def normalized(self, dims: "Dimension")->"FloatingPoint":
+    return FloatingPoint(self.x / dims.width, self.y / dims.height)
+  
+  
 
 @dataclass
 class Dimension:

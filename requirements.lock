@@ -57,8 +57,6 @@ ipython==8.27.0
     # via ipykernel
 jedi==0.19.1
     # via ipython
-joblib==1.4.2
-    # via scikit-learn
 jupyter-client==8.6.3
     # via ipykernel
 jupyter-core==5.7.2
@@ -104,8 +102,7 @@ numpy==1.26.4
     #   opencv-contrib-python
     #   opencv-python
     #   opt-einsum
-    #   scikit-learn
-    #   scipy
+    #   pandas
     #   tensorboard
     #   tensorflow-intel
 opencv-contrib-python==4.10.0.84
@@ -123,6 +120,8 @@ packaging==24.1
     #   matplotlib
     #   tensorboard
     #   tensorflow-intel
+pandas==2.2.3
+    # via -r requirements.in
 parso==0.8.4
     # via jedi
 pillow==10.4.0
@@ -149,6 +148,9 @@ python-dateutil==2.9.0.post0
     # via
     #   jupyter-client
     #   matplotlib
+    #   pandas
+pytz==2024.2
+    # via pandas
 pywin32==306
     # via jupyter-core
 pyzmq==26.2.0
@@ -159,10 +161,6 @@ requests==2.32.3
     # via tensorflow-intel
 rich==13.8.1
     # via keras
-scikit-learn==1.5.2
-    # via -r requirements.in
-scipy==1.14.1
-    # via scikit-learn
 six==1.16.0
     # via
     #   asttokens
@@ -185,8 +183,6 @@ tensorflow-io-gcs-filesystem==0.31.0
     # via tensorflow-intel
 termcolor==2.4.0
     # via tensorflow-intel
-threadpoolctl==3.5.0
-    # via scikit-learn
 tornado==6.4.1
     # via
     #   ipykernel
@@ -206,6 +202,8 @@ typing-extensions==4.12.2
     #   ipython
     #   optree
     #   tensorflow-intel
+tzdata==2024.2
+    # via pandas
 urllib3==2.2.3
     # via requests
 wcwidth==0.2.13

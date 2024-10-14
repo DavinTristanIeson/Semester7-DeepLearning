@@ -1,8 +1,8 @@
 opencv-python
 opencv-contrib-python
 numpy
-scikit-learn
 matplotlib
 tensorflow-cpu
 tqdm
 ipykernel
+pandas

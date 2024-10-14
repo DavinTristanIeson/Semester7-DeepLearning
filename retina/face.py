@@ -1,7 +1,8 @@
 from dataclasses import dataclass
+from enum import Enum
 from functools import lru_cache
 import os
-from typing import Sequence
+from typing import ClassVar, Sequence
 import cv2 as cv
 import urllib.request
 
@@ -69,3 +70,21 @@ def draw_face_landmarks(img: cv.typing.MatLike, landmarks: Sequence[Point])->cv.
   for point in landmarks:
     cv.circle(canvas, (int(point.x), int(point.y)), 1, (255, 255, 255), -1)
   return canvas
+
+class FacialExpressionLabel(Enum):
+  Angry = 0
+  Disgusted = 1
+  Happy = 2
+  Neutral = 3
+  Sad = 4
+  Surprised = 5
+
+
+FACIAL_EXPRESSION_MAPPER: dict[str, FacialExpressionLabel] = {
+  "angry": FacialExpressionLabel.Angry,
+  "disgusted": FacialExpressionLabel.Disgusted,
+  "happy": FacialExpressionLabel.Happy,
+  "neutral": FacialExpressionLabel.Neutral,
+  "sad": FacialExpressionLabel.Sad,
+  "surprised": FacialExpressionLabel.Surprised,
+}
