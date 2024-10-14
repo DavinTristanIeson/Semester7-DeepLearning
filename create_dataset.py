@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 import os
+import random
 import sys
 from typing import Sequence, cast
+
+import numpy as np
 
 
 from retina.face import FACIAL_EXPRESSION_MAPPER, FacialExpressionLabel
@@ -18,6 +21,7 @@ import cv2 as cv
 import pandas as pd
 import tensorflow as tf
 import keras
+import numpy.typing as npt
 
 import retina
 
@@ -58,17 +62,20 @@ def extract_faces(img: cv.typing.MatLike)->Sequence[cv.typing.MatLike]:
       saved_faces.append(face)
   return faces
 
-def extract_face_landmarks(img: cv.typing.MatLike):
+def extract_face_landmarks(img: cv.typing.MatLike, label: int):
   face = cv.filter2D(img, -1, retina.convolution.GAUSSIAN_3X3_KERNEL)
   face = cv.filter2D(img, -1, retina.convolution.SHARPEN_KERNEL)
   face_landmarks = retina.face.face_landmark_detection(face)
-  retina.debug.imdebug(retina.face.draw_face_landmarks(face, face_landmarks))
 
-  # Normalize points
-  dims = Dimension.from_shape(face.shape)
-  normalized_face_landmarks = tuple(map(lambda point: point.normalized(dims),  face_landmarks))
+  
+  retina.debug.imdebug(face_landmarks.draw_on(face))
 
-  return normalized_face_landmarks
+  # 17 points are dedicated for the shape of the face, which we don't really need.
+  feature_vector = face_landmarks.as_feature_vector(normalize=True)
+  feature_vector = feature_vector[17:]
+  feature_vector = np.hstack((label, feature_vector))
+
+  return feature_vector
 
 @dataclass
 class TrainDataEntry:
@@ -89,32 +96,23 @@ for folder in os.scandir(retina.filesys.DATA_DIR_PATH):
     retina.filesys.get_files_in_folder(folder.path)
   ))
 
-# To be considered
-data_augmentation = keras.Sequential([
-  keras.layers.RandomFlip("horizontal"),
-  keras.layers.RandomRotation(0.05),
-  keras.layers.RandomTranslation(0.1, 0.1),
-  keras.layers.RandomBrightness(0.1, value_range=(0, 255)),
-  keras.layers.RandomContrast(0.1),
-])
 
-rows: list[list[float]] = []
+# To be considered
+
+rows: list[npt.NDArray] = []
 for entry in tqdm.tqdm(entries, desc="Building dataset from images"):
   original = cv.imread(entry.path)
   img = preprocess_image(original)
   faces = extract_faces(img)
 
-  for original_face in faces:
-    for i in range(10):
-      face = data_augmentation(original_face, training=True)
-      print(i)
-      landmarks = list(map(extract_face_landmarks, faces))
-      for landmark in landmarks:
-        row: list[float] = [entry.label.value]
-        for idx, point in enumerate(landmark):
-          row.append(point.x)
-          row.append(point.y)
-        rows.append(row)
+  if len(faces) == 0:
+    continue
+
+  for face in faces:
+    for i in range(5):
+      face = retina.cvutil.rotate_image(face, 10 - (random.random() * 20))
+      landmark = extract_face_landmarks(face, entry.label.value)
+      rows.append(landmark)
   
 if len(rows) == 0:
   print(f"{Ansi.Error}No images were successfully processed into the dataset.{Ansi.End}")

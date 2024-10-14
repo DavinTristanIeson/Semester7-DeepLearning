@@ -7,10 +7,10 @@ import cv2 as cv
 import urllib.request
 
 import numpy as np
+import numpy.typing as npt
 
-import retina
 from retina.log import Ansi
-from retina.size import Point, Rectangle
+from retina.size import Dimension, FloatingPoint, Point, Rectangle
 
 CASCADE_CLASSIFIER_PATH = "retina/haarcascade_frontalface_default.xml"
 
@@ -54,7 +54,36 @@ def many_face_landmark_detection(img: cv.typing.MatLike, faces: Sequence[Rectang
 
   return wrapped_landmarks
 
-def face_landmark_detection(img: cv.typing.MatLike)->Sequence[Point]:
+@dataclass
+class FaceLandmark:
+  face_shape: list[Point]
+  eyes: list[Point]
+  nose: list[Point]
+  lips: list[Point]
+  dims: Dimension
+
+  
+  @property
+  def points(self):
+    return [*self.face_shape, *self.eyes, *self.nose, *self.lips]
+
+  
+  def as_feature_vector(self, normalize: bool)->npt.NDArray:
+    features = []
+    for point in self.points:
+      if normalize:
+        point = point.normalized(self.dims)
+      features.append(point.x)
+      features.append(point.y)
+    return np.array(features)
+  
+  def draw_on(self, img: cv.typing.MatLike)->npt.NDArray:
+    canvas = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+    for idx, point in enumerate(self.points):
+      cv.circle(canvas, (int(point.x), int(point.y)), 1, (0, 255, 0), -1)
+    return canvas
+
+def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
   # Source: https://towardsdatascience.com/face-detection-in-2-minutes-using-opencv-python-90f89d7c0f81
   landmark_detector = get_face_landmark_detector()
   _, face_landmarks = landmark_detector.fit(img, np.array(((0, 0, img.shape[0], img.shape[1]),)))
@@ -63,13 +92,13 @@ def face_landmark_detection(img: cv.typing.MatLike)->Sequence[Point]:
   for point in face_landmarks[0][0]:
     points.append(Point(point[0], point[1]))
 
-  return points
-
-def draw_face_landmarks(img: cv.typing.MatLike, landmarks: Sequence[Point])->cv.typing.MatLike:
-  canvas = img.copy()
-  for point in landmarks:
-    cv.circle(canvas, (int(point.x), int(point.y)), 1, (255, 255, 255), -1)
-  return canvas
+  return FaceLandmark(
+    face_shape=points[:17],
+    eyes=points[17:-32],
+    nose=points[-32:-20],
+    lips=points[-20:],
+    dims=Dimension.from_shape(img.shape)
+  )
 
 class FacialExpressionLabel(Enum):
   Angry = 0
