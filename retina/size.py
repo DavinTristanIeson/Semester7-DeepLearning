@@ -12,11 +12,15 @@ class FloatingPoint:
   x:float
   y:float
   @property
+  def integer(self)->"Point":
+    return Point(int(self.x), int(self.y))
+  @property
   def tuple(self)->tuple[float, float]:
     return (self.x, self.y)
   @staticmethod
   def from_tuple(src: Tuple[int, int])->"Point":
     return Point(src[0], src[1])
+  
 
 @dataclass
 class Point:
@@ -30,7 +34,7 @@ class Point:
     return self.x
   @property
   def tuple(self)->tuple[int, int]:
-    return (self.x, self.y)
+    return (int(self.x), int(self.y))
   @property
   def as_cell(self)->Tuple[int, int]:
     return (self.row, self.col)
