@@ -8,6 +8,8 @@ import urllib.request
 
 import numpy as np
 import numpy.typing as npt
+import scipy
+import scipy.spatial
 
 from retina.log import Ansi
 from retina.size import Dimension, FloatingPoint, Point, Rectangle
@@ -56,45 +58,62 @@ def many_face_landmark_detection(img: cv.typing.MatLike, faces: Sequence[Rectang
 
 @dataclass
 class FaceLandmark:
-  face_shape: list[Point]
-  eyes: list[Point]
-  eyebrows: list[Point]
-  nose: list[Point]
-  lips: list[Point]
+  face_shape: list[npt.NDArray]
+  eyes: list[npt.NDArray]
+  eyebrows: list[npt.NDArray]
+  nose: list[npt.NDArray]
+  lips: list[npt.NDArray]
   dims: Dimension
 
   
   @property
-  def points(self):
-    return [*self.face_shape, *self.eyes, *self.nose, *self.lips]
+  def feature_points(self)->npt.NDArray:
+    return np.vstack([self.eyes, self.nose, self.lips])
 
-  
-  def as_feature_vector(self, normalize: bool)->npt.NDArray:
-    features = []
-    for point in self.points:
-      if normalize:
-        point = point.normalized(self.dims)
-      features.append(point.x)
-      features.append(point.y)
-    return np.array(features)
-  
+  def as_feature_vector(self)->npt.NDArray:
+    # https://arxiv.org/pdf/1812.04510
+    # 17 points are dedicated for the shape of the face, which we don't really need.
+    normalized_points = self.feature_points / np.array((self.dims.width, self.dims.height))
+    interdistance_map = scipy.spatial.distance.cdist(normalized_points, normalized_points, "euclidean").flatten()
+    # All diagonal values are excluded
+    excluded_points = np.eye(len(self.feature_points)).flatten() == 1
+
+    interdistance_map = interdistance_map[~excluded_points]
+
+    # Also calculate the distance to the average point in the face
+    average_point = normalized_points.mean(axis=0)
+    distances_to_center = scipy.spatial.distance.cdist(np.array([average_point]), normalized_points, "euclidean")[0]
+
+    feature_vector = np.hstack((interdistance_map, distances_to_center))
+
+    return feature_vector
+
+
   EYE_COLOR: ClassVar[tuple[int, int, int]] = (0, 0, 255)
   LIP_COLOR: ClassVar[tuple[int, int, int]] = (0, 255, 0)
   NOSE_COLOR: ClassVar[tuple[int, int, int]] = (255, 0, 0)
   FACE_SHAPE_COLOR: ClassVar[tuple[int, int, int]] = (255, 255, 0)
   EYEBROW_COLOR: ClassVar[tuple[int, int, int]] = (0, 255, 255)
-  def draw_on(self, img: cv.typing.MatLike)->npt.NDArray:
+  def draw_on(self, img: cv.typing.MatLike, *, with_distances: bool = False)->npt.NDArray:
     canvas = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
     for point in self.eyes:
-      cv.circle(canvas, (int(point.x), int(point.y)), 1, self.EYE_COLOR, -1)
+      cv.circle(canvas, tuple(point.astype(np.int32)), 1, self.EYE_COLOR, -1)
     for point in self.lips:
-      cv.circle(canvas, (int(point.x), int(point.y)), 1, self.LIP_COLOR, -1)
+      cv.circle(canvas, tuple(point.astype(np.int32)), 1, self.LIP_COLOR, -1)
     for point in self.nose:
-      cv.circle(canvas, (int(point.x), int(point.y)), 1, self.NOSE_COLOR, -1)
+      cv.circle(canvas, tuple(point.astype(np.int32)), 1, self.NOSE_COLOR, -1)
     for point in self.face_shape:
-      cv.circle(canvas, (int(point.x), int(point.y)), 1, self.FACE_SHAPE_COLOR, -1)
+      cv.circle(canvas, tuple(point.astype(np.int32)), 1, self.FACE_SHAPE_COLOR, -1)
     for point in self.eyebrows:
-      cv.circle(canvas, (int(point.x), int(point.y)), 1, self.EYEBROW_COLOR, -1)
+      cv.circle(canvas, tuple(point.astype(np.int32)), 1, self.EYEBROW_COLOR, -1)
+
+    if with_distances:
+      for i, point in enumerate(self.feature_points):
+        for j, other in enumerate(self.feature_points):
+          if i == j:
+            continue
+          cv.line(canvas, tuple(point.astype(np.int32)), tuple(other.astype(np.int32)), self.EYE_COLOR, 1)
+
     return canvas
 
 def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
@@ -102,9 +121,7 @@ def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
   landmark_detector = get_face_landmark_detector()
   _, face_landmarks = landmark_detector.fit(img, np.array(((0, 0, img.shape[0], img.shape[1]),)))
 
-  points: list[Point] = []
-  for point in face_landmarks[0][0]:
-    points.append(Point(point[0], point[1]))
+  points: list[npt.NDArray] = face_landmarks[0][0]
 
   return FaceLandmark(
     face_shape=points[:17],
@@ -113,59 +130,7 @@ def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
     eyes=points[36:48],
     lips=points[48:],
     dims=Dimension.from_shape(img.shape)
-  )
-
-@dataclass
-class FaceFeatures:
-  # https://arxiv.org/pdf/1812.04510
-  left_eye_height: float
-  left_eye_width: float
-  right_eye_height: float
-  right_eye_width: float
-  left_eyebrow_width: float
-  right_eyebrow_width: float
-  lip_width: float  
-  left_eye_upper_corner_and_left_eyebrow_center_dist: float
-  right_eye_upper_corner_and_right_eyebrow_center_dist: float
-  nose_center_and_lips_center_dist: float
-  left_eye_lower_corner_and_lips_left_corner_dist: float
-  right_eye_lower_corner_and_lips_right_corner_dist: float
-
-  def as_feature_vector(self)->npt.NDArray:
-    return np.array([
-      self.left_eye_height, self.left_eye_width, self.right_eye_height, self.right_eye_width, \
-      self.left_eyebrow_width, self.right_eyebrow_width, self.lip_width, \
-      self.left_eye_lower_corner_and_lips_left_corner_dist, \
-      self.right_eye_upper_corner_and_right_eyebrow_center_dist, \
-      self.nose_center_and_lips_center_dist, \
-      self.left_eye_lower_corner_and_lips_left_corner_dist,
-      self.right_eye_lower_corner_and_lips_right_corner_dist,
-    ])
-  
-  @staticmethod
-  def debug(img: cv.typing.MatLike, landmark: FaceLandmark)->cv.typing.MatLike:
-    img = landmark.draw_on(img)
-
-    left_eye_left_corner = landmark.eyes[0]
-    left_eye_top_corner = FloatingPoint(
-      (landmark.eyes[1].x + landmark.eyes[2].x) / 2,
-      (landmark.eyes[1].y + landmark.eyes[2].y) / 2
-    )
-    left_eye_bottom_corner = FloatingPoint(
-      (landmark.eyes[4].x + landmark.eyes[5].x) / 2,
-      (landmark.eyes[4].y + landmark.eyes[5].y) / 2
-    )
-    left_eye_right_corner = landmark.eyes[3]
-
-    cv.line(img, left_eye_left_corner.tuple, left_eye_right_corner.tuple, FaceLandmark.EYE_COLOR)
-    cv.line(img, left_eye_top_corner.integer.tuple, left_eye_bottom_corner.integer.tuple, FaceLandmark.EYE_COLOR)
-  
-    return img
-
-  @staticmethod
-  def from_landmark(landmark: FaceLandmark)->"FaceFeatures":
-    ...
-
+  )  
 
 class FacialExpressionLabel(Enum):
   Angry = 0
