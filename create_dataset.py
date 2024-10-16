@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import os
+import pickle
 import random
 import sys
 from typing import Sequence, cast
@@ -35,44 +36,6 @@ def preprocess_image(img: cv.typing.MatLike):
   img = retina.colors.clahe(img) # Contrast adjustment
   return img
 
-def extract_faces(img: cv.typing.MatLike)->Sequence[cv.typing.MatLike]:
-  face_positions = retina.face.haar_detect(img)
-  faces = tuple(
-    img[pos.slice]
-    for pos in face_positions
-  )
-
-  retina.debug.imdebug(retina.debug.draw_rectangles(img, face_positions))
-
-  saved_faces: list[cv.typing.MatLike] = []
-  for i in range(len(faces)):
-    face = faces[i]
-    rect = face_positions[i]
-    is_overlapping = False
-    for j in range(0, i):
-      other_rect = face_positions[j]
-      # Don't grab overlapping squares
-      IOU = rect.intersection_with_union(other_rect)
-      if IOU > 0.4:
-        is_overlapping = True
-        break
-
-    if not is_overlapping:
-      saved_faces.append(face)
-  return faces
-
-def extract_face_landmarks(img: cv.typing.MatLike, label: int):
-  face = cv.filter2D(img, -1, retina.convolution.GAUSSIAN_3X3_KERNEL)
-  face = cv.filter2D(img, -1, retina.convolution.SHARPEN_KERNEL)
-  face_landmarks = retina.face.face_landmark_detection(face)
-
-  retina.debug.imdebug(face_landmarks.draw_on(face))
-  
-  feature_vector = face_landmarks.as_feature_vector()
-  feature_vector = np.hstack((label, feature_vector))
-
-  return feature_vector
-
 @dataclass
 class TrainDataEntry:
   path: str
@@ -95,11 +58,13 @@ for folder in os.scandir(retina.filesys.DATA_DIR_PATH):
 
 # To be considered
 
-rows: list[npt.NDArray] = []
+list_data: list[npt.NDArray] = []
+list_labels: list[int] = []
 for entry in tqdm.tqdm(entries, desc="Building dataset from images"):
   original = cv.imread(entry.path)
   img = preprocess_image(original)
-  faces = extract_faces(img)
+  canvas = img.copy()
+  faces, _ = retina.face.extract_faces(img)
 
   if len(faces) == 0:
     continue
@@ -107,19 +72,30 @@ for entry in tqdm.tqdm(entries, desc="Building dataset from images"):
   for face in faces:
     for i in range(10):
       face = retina.cvutil.rotate_image(face, 10 - (random.random() * 20))
-      landmark = extract_face_landmarks(face, entry.label.value)
-      rows.append(landmark)
+      canvas = cv.cvtColor(face, cv.COLOR_GRAY2BGR)
+      landmark = retina.face.extract_face_landmarks(face, canvas=canvas)
+
+      retina.debug.imdebug(canvas)
+
+      list_data.append(landmark)
+      list_labels.append(entry.label.value)
   
-if len(rows) == 0:
+if len(list_data) == 0:
   print(f"{Ansi.Error}No images were successfully processed into the dataset.{Ansi.End}")
   exit(1)
 
-dfdata = np.array(rows)
-labels = dfdata[:, 0].reshape((-1, 1))
-data = dfdata[:, 1:]
 
-pca = sklearn.decomposition.PCA(20)
+data = np.array(list_data)
+labels = np.array(list_labels).reshape((-1, 1))
+
+pca = sklearn.decomposition.PCA(retina.face.FEATURE_DIMENSIONS)
 data = pca.fit_transform(data) # type: ignore
+
+if not os.path.exists(retina.filesys.MODEL_DIR_PATH):
+  os.mkdir(retina.filesys.MODEL_DIR_PATH)
+with open(retina.filesys.PCA_MODEL_PATH, 'wb') as f:
+  pickle.dump(pca, f)
+
 dfdata = np.hstack((labels, data))
 
 df = pd.DataFrame(dfdata, columns=[
@@ -127,5 +103,5 @@ df = pd.DataFrame(dfdata, columns=[
   *map(lambda idx: f'feature-{idx + 1}', range(dfdata.shape[1] - 1))
 ])
 
-df.to_csv(retina.filesys.DATA_CSV_PATH, index=False)
+df.to_csv(retina.filesys.TRAINING_DATA_CSV_PATH, index=False)
 

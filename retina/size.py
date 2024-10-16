@@ -36,6 +36,9 @@ class Point:
   def tuple(self)->tuple[int, int]:
     return (int(self.x), int(self.y))
   @property
+  def nparray(self)->npt.NDArray:
+    return np.array(self.tuple)
+  @property
   def as_cell(self)->Tuple[int, int]:
     return (self.row, self.col)
   @staticmethod

@@ -2,7 +2,8 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
 import os
-from typing import ClassVar, Sequence
+import pickle
+from typing import ClassVar, Optional, Sequence
 import cv2 as cv
 import urllib.request
 
@@ -10,7 +11,10 @@ import numpy as np
 import numpy.typing as npt
 import scipy
 import scipy.spatial
+import sklearn
+import sklearn.decomposition
 
+import retina
 from retina.log import Ansi
 from retina.size import Dimension, FloatingPoint, Point, Rectangle
 
@@ -94,27 +98,18 @@ class FaceLandmark:
   NOSE_COLOR: ClassVar[tuple[int, int, int]] = (255, 0, 0)
   FACE_SHAPE_COLOR: ClassVar[tuple[int, int, int]] = (255, 255, 0)
   EYEBROW_COLOR: ClassVar[tuple[int, int, int]] = (0, 255, 255)
-  def draw_on(self, img: cv.typing.MatLike, *, with_distances: bool = False)->npt.NDArray:
-    canvas = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+  def draw_on(self, img: cv.typing.MatLike, *, offset: Point = Point(0, 0)):
+    offsetnp = offset.nparray
     for point in self.eyes:
-      cv.circle(canvas, tuple(point.astype(np.int32)), 1, self.EYE_COLOR, -1)
+      cv.circle(img, tuple(point.astype(np.int32) + offsetnp), 1, self.EYE_COLOR, -1)
     for point in self.lips:
-      cv.circle(canvas, tuple(point.astype(np.int32)), 1, self.LIP_COLOR, -1)
+      cv.circle(img, tuple(point.astype(np.int32) + offsetnp), 1, self.LIP_COLOR, -1)
     for point in self.nose:
-      cv.circle(canvas, tuple(point.astype(np.int32)), 1, self.NOSE_COLOR, -1)
+      cv.circle(img, tuple(point.astype(np.int32) + offsetnp), 1, self.NOSE_COLOR, -1)
     for point in self.face_shape:
-      cv.circle(canvas, tuple(point.astype(np.int32)), 1, self.FACE_SHAPE_COLOR, -1)
+      cv.circle(img, tuple(point.astype(np.int32) + offsetnp), 1, self.FACE_SHAPE_COLOR, -1)
     for point in self.eyebrows:
-      cv.circle(canvas, tuple(point.astype(np.int32)), 1, self.EYEBROW_COLOR, -1)
-
-    if with_distances:
-      for i, point in enumerate(self.feature_points):
-        for j, other in enumerate(self.feature_points):
-          if i == j:
-            continue
-          cv.line(canvas, tuple(point.astype(np.int32)), tuple(other.astype(np.int32)), self.EYE_COLOR, 1)
-
-    return canvas
+      cv.circle(img, tuple(point.astype(np.int32) + offsetnp), 1, self.EYEBROW_COLOR, -1)
 
 def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
   # Source: https://towardsdatascience.com/face-detection-in-2-minutes-using-opencv-python-90f89d7c0f81
@@ -149,3 +144,76 @@ FACIAL_EXPRESSION_MAPPER: dict[str, FacialExpressionLabel] = {
   "sad": FacialExpressionLabel.Sad,
   "surprised": FacialExpressionLabel.Surprised,
 }
+
+def extract_faces(img: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None)->tuple[Sequence[cv.typing.MatLike], Sequence[Rectangle]]:
+  face_positions = haar_detect(img)
+  faces = tuple(
+    img[pos.slice]
+    for pos in face_positions
+  )
+
+  # retina.debug.imdebug(retina.debug.draw_rectangles(img, face_positions))
+
+  saved_faces: list[cv.typing.MatLike] = []
+  saved_face_positions: list[Rectangle] = []
+  for i in range(len(faces)):
+    face = faces[i]
+    rect = face_positions[i]
+    is_overlapping = False
+    for j in range(0, i):
+      other_rect = face_positions[j]
+      # Don't grab overlapping squares
+      IOU = rect.intersection_with_union(other_rect)
+      if IOU > 0.4:
+        is_overlapping = True
+        break
+
+    if not is_overlapping:
+      saved_faces.append(face)
+      saved_face_positions.append(rect)
+
+  if canvas is not None:
+    for facepos in saved_face_positions:
+      cv.rectangle(canvas, facepos.tuple, (0, 255, 0), 1)
+  return saved_faces, saved_face_positions
+
+def extract_face_landmarks(img: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None, offset: Point = Point(0, 0)):
+  face = cv.filter2D(img, -1, retina.convolution.GAUSSIAN_3X3_KERNEL)
+  face = cv.filter2D(img, -1, retina.convolution.SHARPEN_KERNEL)
+  face_landmarks = retina.face.face_landmark_detection(face)
+  
+  feature_vector = face_landmarks.as_feature_vector()
+  if canvas is not None:
+    face_landmarks.draw_on(canvas, offset=offset)
+
+  return feature_vector
+
+FEATURE_DIMENSIONS = 20
+
+@lru_cache(maxsize=1)
+def get_trained_pca_model()->sklearn.decomposition.PCA:
+  if not os.path.exists(retina.filesys.PCA_MODEL_PATH):
+    raise Exception("Model has not been trained yet. Check")
+  with open(retina.filesys.PCA_MODEL_PATH, 'rb') as f:
+    return pickle.load(f)
+
+def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None)->Optional[npt.NDArray]:
+  img = retina.cvutil.resize_image(original, retina.size.STANDARD_DIMENSIONS) # Resize
+  img = cv.cvtColor(img, cv.COLOR_BGR2GRAY) # Grayscale
+  img = retina.colors.clahe(img) # Contrast adjustment
+  pca_model = get_trained_pca_model()
+
+
+  faces, face_rects = extract_faces(img, canvas=canvas)
+
+  landmarks: list[npt.NDArray] = []
+  for face, face_rect in zip(faces, face_rects):
+    landmark = extract_face_landmarks(face, canvas=canvas, offset=face_rect.p0)
+    landmarks.append(landmark)
+
+  if len(landmarks) == 0:
+    return None
+  
+  feature_vectors = pca_model.transform(np.array(landmarks))
+    
+  return feature_vectors
