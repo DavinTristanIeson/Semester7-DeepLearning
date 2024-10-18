@@ -65,11 +65,11 @@ def many_face_landmark_detection(img: cv.typing.MatLike, faces: Sequence[Rectang
 
 @dataclass
 class FaceLandmark:
-  face_shape: list[npt.NDArray]
-  eyes: list[npt.NDArray]
-  eyebrows: list[npt.NDArray]
-  nose: list[npt.NDArray]
-  lips: list[npt.NDArray]
+  face_shape: npt.NDArray
+  eyes: npt.NDArray
+  eyebrows: npt.NDArray
+  nose: npt.NDArray
+  lips: npt.NDArray
   dims: Dimension
 
   
@@ -120,7 +120,7 @@ def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
   landmark_detector = get_face_landmark_detector()
   _, face_landmarks = landmark_detector.fit(img, np.array(((0, 0, img.shape[0], img.shape[1]),)))
 
-  points: list[npt.NDArray] = face_landmarks[0][0]
+  points: npt.NDArray = face_landmarks[0][0]
 
   return FaceLandmark(
     face_shape=points[:17],
@@ -131,14 +131,23 @@ def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
     dims=Dimension.from_shape(img.shape)
   )
 
-def face_lbp(img: cv.typing.MatLike)->npt.NDArray:
+def face_lbp(img: cv.typing.MatLike, landmark: FaceLandmark, *, canvas: Optional[cv.typing.MatLike] = None)->npt.NDArray:
   dims = Dimension.from_shape(img.shape)
-  rects = dims.partition(7, 7)
+  bboxes = dims.partition(7, 7)
+  # eyes_points = np.vstack((landmark.eyes, landmark.eyebrows))
+  # eyes_box = Rectangle.min_bbox(eyes_points).expand(5, 5).clamp(dims)
+  # nose_box = Rectangle.min_bbox(landmark.nose).translate(0, 10).expand(15, 0).clamp(dims)
+  # lips_box = Rectangle.min_bbox(landmark.lips).expand(10, 5).clamp(dims)
+
+  # bboxes = [eyes_box, nose_box, lips_box]
+
+  if canvas is not None:
+    retina.debug.imdebug(retina.debug.draw_rectangles(canvas, bboxes))
   
   histograms: list[npt.NDArray] = []
-  for rect in rects:
+  for rect in bboxes:
     chunk = img[rect.slice]
-    radius = 2
+    radius = 3
     lbp = skimage.feature.local_binary_pattern(chunk, 8 * radius, radius)
     histograms.append(scipy.ndimage.histogram(lbp, 0, 255, 10))
   
@@ -201,11 +210,10 @@ def extract_face_landmarks(img: cv.typing.MatLike, *, canvas: Optional[cv.typing
   face = cv.filter2D(img, -1, retina.convolution.SHARPEN_KERNEL)
   face_landmarks = retina.face.face_landmark_detection(face)
   
-  feature_vector = face_landmarks.as_feature_vector()
   if canvas is not None:
     face_landmarks.draw_on(canvas, offset=offset)
 
-  return feature_vector
+  return face_landmarks
 
 LANDMARK_FEATURE_DIMENSIONS = 50
 TEXTURE_FEATURE_DIMENSIONS = 50
@@ -232,9 +240,11 @@ def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike]
   faces, face_rects = extract_faces(img, canvas=canvas)
 
   landmarks: list[npt.NDArray] = []
+  textures: list[npt.NDArray] = []
   for face, face_rect in zip(faces, face_rects):
     landmark = extract_face_landmarks(face, canvas=canvas, offset=face_rect.p0)
-    landmarks.append(landmark)
+    landmarks.append(landmark.as_feature_vector())
+    textures.append(face_lbp(face, landmark))
 
   if len(landmarks) == 0:
     return None
@@ -242,9 +252,7 @@ def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike]
   landmark_pca_model = get_landmark_pca_model()
   landmark_feature_vectors = landmark_pca_model.transform(np.array(landmarks))
 
-
-  lbp_features = face_lbp(img)
   texture_pca_model = get_texture_pca_model()
-  texture_feature_vectors = texture_pca_model.transform(lbp_features)
+  texture_feature_vectors = texture_pca_model.transform(np.array(textures))
     
   return np.hstack([landmark_feature_vectors, texture_feature_vectors])
