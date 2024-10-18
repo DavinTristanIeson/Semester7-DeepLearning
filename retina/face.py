@@ -82,7 +82,8 @@ class FaceLandmark:
     # All diagonal values are excluded
     excluded_points = np.eye(len(self.feature_points)).flatten() == 1
 
-    interdistance_map = interdistance_map[~excluded_points]
+    # Square the interdistance map to make larger differences more prominent
+    interdistance_map = np.power(interdistance_map[~excluded_points], 2)
 
     # Also calculate the distance to the average point in the face
     average_point = normalized_points.mean(axis=0)
@@ -144,6 +145,8 @@ FACIAL_EXPRESSION_MAPPER: dict[str, FacialExpressionLabel] = {
   "sad": FacialExpressionLabel.Sad,
   "surprised": FacialExpressionLabel.Surprised,
 }
+
+INVERSE_FACIAL_EXPRESSION_MAPPER: dict[FacialExpressionLabel, str] = {v:k for k, v in FACIAL_EXPRESSION_MAPPER.items()}
 
 def extract_faces(img: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None)->tuple[Sequence[cv.typing.MatLike], Sequence[Rectangle]]:
   face_positions = haar_detect(img)

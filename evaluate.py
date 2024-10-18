@@ -24,8 +24,9 @@ while cv.waitKey(5) != 27:
   cv.imshow("Camera Feed", canvas)
   if features is None:
     continue
-  prediction = expreg_model.predict(features)
+  prediction = expreg_model.predict(features, verbose=0) # type: ignore
   labels = np.argmax(prediction, axis=1)
+
   for label in labels:
     print(class_names[label].name, end=' ')
-  print()
+  print(prediction)

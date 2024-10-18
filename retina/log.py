@@ -1,7 +1,7 @@
 class Ansi:
   Error = '\033[91m'
-  Warning = '\033[92m'
-  Success = '\033[93m'
+  Warning = '\033[93m'
+  Success = '\033[92m'
   End = '\033[0m'
   Grey = "\033[38;5;243m"
   Bold = "\033[1m"
