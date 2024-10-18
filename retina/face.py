@@ -4,7 +4,10 @@ from functools import lru_cache
 import os
 import pickle
 from typing import ClassVar, Optional, Sequence
+
+import scipy.ndimage
 import cv2 as cv
+import skimage
 import urllib.request
 
 import numpy as np
@@ -126,7 +129,20 @@ def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
     eyes=points[36:48],
     lips=points[48:],
     dims=Dimension.from_shape(img.shape)
-  )  
+  )
+
+def face_lbp(img: cv.typing.MatLike)->npt.NDArray:
+  dims = Dimension.from_shape(img.shape)
+  rects = dims.partition(7, 7)
+  
+  histograms: list[npt.NDArray] = []
+  for rect in rects:
+    chunk = img[rect.slice]
+    radius = 2
+    lbp = skimage.feature.local_binary_pattern(chunk, 8 * radius, radius)
+    histograms.append(scipy.ndimage.histogram(lbp, 0, 255, 10))
+  
+  return np.hstack(histograms)
 
 class FacialExpressionLabel(Enum):
   Angry = 0
@@ -191,21 +207,27 @@ def extract_face_landmarks(img: cv.typing.MatLike, *, canvas: Optional[cv.typing
 
   return feature_vector
 
-FEATURE_DIMENSIONS = 20
+LANDMARK_FEATURE_DIMENSIONS = 50
+TEXTURE_FEATURE_DIMENSIONS = 50
 
 @lru_cache(maxsize=1)
-def get_trained_pca_model()->sklearn.decomposition.PCA:
-  if not os.path.exists(retina.filesys.PCA_MODEL_PATH):
-    raise Exception("Model has not been trained yet. Check")
-  with open(retina.filesys.PCA_MODEL_PATH, 'rb') as f:
+def get_landmark_pca_model()->sklearn.decomposition.PCA:
+  if not os.path.exists(retina.filesys.LANDMARK_PCA_MODEL_PATH):
+    raise Exception("Model has not been trained yet.")
+  with open(retina.filesys.LANDMARK_PCA_MODEL_PATH, 'rb') as f:
+    return pickle.load(f)
+  
+@lru_cache(maxsize=1)
+def get_texture_pca_model()->sklearn.decomposition.PCA:
+  if not os.path.exists(retina.filesys.TEXTURE_PCA_MODEL_PATH):
+    raise Exception("Model has not been trained yet.")
+  with open(retina.filesys.TEXTURE_PCA_MODEL_PATH, 'rb') as f:
     return pickle.load(f)
 
 def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None)->Optional[npt.NDArray]:
   img = retina.cvutil.resize_image(original, retina.size.STANDARD_DIMENSIONS) # Resize
   img = cv.cvtColor(img, cv.COLOR_BGR2GRAY) # Grayscale
   img = retina.colors.clahe(img) # Contrast adjustment
-  pca_model = get_trained_pca_model()
-
 
   faces, face_rects = extract_faces(img, canvas=canvas)
 
@@ -217,6 +239,12 @@ def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike]
   if len(landmarks) == 0:
     return None
   
-  feature_vectors = pca_model.transform(np.array(landmarks))
+  landmark_pca_model = get_landmark_pca_model()
+  landmark_feature_vectors = landmark_pca_model.transform(np.array(landmarks))
+
+
+  lbp_features = face_lbp(img)
+  texture_pca_model = get_texture_pca_model()
+  texture_feature_vectors = texture_pca_model.transform(lbp_features)
     
-  return feature_vectors
+  return np.hstack([landmark_feature_vectors, texture_feature_vectors])

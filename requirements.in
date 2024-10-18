@@ -1,6 +1,9 @@
 opencv-python
 opencv-contrib-python
 numpy
+scipy
+scikit-image
+scikit-learn
 matplotlib
 tensorflow-cpu
 tqdm

@@ -7,7 +7,8 @@ DATASET_PATH = "dataset.zip"
 DATA_DIR_PATH = "data"
 MODEL_DIR_PATH = "models"
 TRAINING_DATA_CSV_PATH = os.path.join(DATA_DIR_PATH, "data.csv")
-PCA_MODEL_PATH = os.path.join(MODEL_DIR_PATH, "face_pca.pickle")
+LANDMARK_PCA_MODEL_PATH = os.path.join(MODEL_DIR_PATH, "landmark_pca.pickle")
+TEXTURE_PCA_MODEL_PATH = os.path.join(MODEL_DIR_PATH, "texture_pca.pickle")
 EXPRESSION_RECOGNITION_MODEL_PATH = os.path.join(MODEL_DIR_PATH, "expression_recognition.keras")
 
 def get_files_in_folder(basepath: str):

@@ -110,6 +110,19 @@ class Dimension:
   def scale(self, scale: float)->"Dimension":
     return Dimension(int(self.width * scale), int(self.height * scale))
   
+  def partition(self, rows: int, cols: int)->list["Rectangle"]:
+    row_delta = int(self.width / rows)
+    col_delta = int(self.height / cols)
+    rects: list["Rectangle"] = []
+    for row in range(rows):
+      for col in range(cols):
+        row_start = row * row_delta
+        col_start = col * col_delta
+        rect = Rectangle(col_start, row_start, col_start + col_delta, row_start + row_delta)
+        rects.append(rect)
+    return rects
+      
+  
   @staticmethod
   def blerp(image: npt.NDArray, dimensions: "Dimension")->npt.NDArray:
     # https://chao-ji.github.io/jekyll/update/2018/07/19/BilinearResize.html

@@ -58,7 +58,8 @@ for folder in os.scandir(retina.filesys.DATA_DIR_PATH):
 
 # To be considered
 
-list_data: list[npt.NDArray] = []
+list_landmark_data: list[npt.NDArray] = []
+list_texture_data: list[npt.NDArray] = []
 list_labels: list[int] = []
 for entry in tqdm.tqdm(entries, desc="Building dataset from images"):
   original = cv.imread(entry.path)
@@ -70,37 +71,43 @@ for entry in tqdm.tqdm(entries, desc="Building dataset from images"):
     continue
 
   for face in faces:
-    for i in range(10):
-      face = retina.cvutil.rotate_image(face, 10 - (random.random() * 20))
-      canvas = cv.cvtColor(face, cv.COLOR_GRAY2BGR)
-      landmark = retina.face.extract_face_landmarks(face, canvas=canvas)
+    canvas = cv.cvtColor(face, cv.COLOR_GRAY2BGR)
+    landmark = retina.face.extract_face_landmarks(face, canvas=canvas)
+    texture = retina.face.face_lbp(face)
 
-      retina.debug.imdebug(canvas)
+    retina.debug.imdebug(canvas)
 
-      list_data.append(landmark)
-      list_labels.append(entry.label.value)
+    list_landmark_data.append(landmark)
+    list_texture_data.append(texture)
+    list_labels.append(entry.label.value)
   
-if len(list_data) == 0:
+if len(list_landmark_data) == 0:
   print(f"{Ansi.Error}No images were successfully processed into the dataset.{Ansi.End}")
   exit(1)
 
 
-data = np.array(list_data)
+landmark_data = np.array(list_landmark_data)
+texture_data = np.array(list_texture_data)
 labels = np.array(list_labels).reshape((-1, 1))
 
-pca = sklearn.decomposition.PCA(retina.face.FEATURE_DIMENSIONS)
-data = pca.fit_transform(data) # type: ignore
+landmark_pca = sklearn.decomposition.PCA(retina.face.LANDMARK_FEATURE_DIMENSIONS)
+texture_pca = sklearn.decomposition.PCA(retina.face.TEXTURE_FEATURE_DIMENSIONS)
+landmark_data = landmark_pca.fit_transform(landmark_data) # type: ignore
+texture_data = texture_pca.fit_transform(texture_data) # type: ignore
 
 if not os.path.exists(retina.filesys.MODEL_DIR_PATH):
   os.mkdir(retina.filesys.MODEL_DIR_PATH)
-with open(retina.filesys.PCA_MODEL_PATH, 'wb') as f:
-  pickle.dump(pca, f)
+with open(retina.filesys.LANDMARK_PCA_MODEL_PATH, 'wb') as f:
+  pickle.dump(landmark_pca, f)
+with open(retina.filesys.TEXTURE_PCA_MODEL_PATH, 'wb') as f:
+  pickle.dump(texture_pca, f)
 
-dfdata = np.hstack((labels, data))
+dfdata = np.hstack((labels, landmark_data, texture_data))
 
 df = pd.DataFrame(dfdata, columns=[
   "label",
-  *map(lambda idx: f'feature-{idx + 1}', range(dfdata.shape[1] - 1))
+  *map(lambda idx: f'landmark-{idx + 1}', range(retina.face.LANDMARK_FEATURE_DIMENSIONS)),
+  *map(lambda idx: f'texture-{idx + 1}', range(retina.face.TEXTURE_FEATURE_DIMENSIONS))
 ])
 
 df.to_csv(retina.filesys.TRAINING_DATA_CSV_PATH, index=False)
