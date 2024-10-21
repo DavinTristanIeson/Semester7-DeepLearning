@@ -135,6 +135,11 @@ class FacialExpressionLabel(Enum):
   Neutral = 3
   Sad = 4
   Surprised = 5
+  
+  @staticmethod
+  def target_names():
+    return tuple(map(lambda x: x.name, sorted(FacialExpressionLabel.__members__.values(), key=lambda x: x.value)))
+
 
 
 FACIAL_EXPRESSION_MAPPER: dict[str, FacialExpressionLabel] = {
