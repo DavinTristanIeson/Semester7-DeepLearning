@@ -72,7 +72,7 @@ class FaceLandmark:
   
   @property
   def feature_points(self)->npt.NDArray:
-    return np.vstack([self.eyes, self.nose, self.lips])
+    return np.vstack([self.eyes, self.eyebrows, self.nose, self.lips])
 
   def as_feature_vector(self)->npt.NDArray:
     # https://arxiv.org/pdf/1812.04510

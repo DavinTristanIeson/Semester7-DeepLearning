@@ -70,15 +70,15 @@ for entry in tqdm.tqdm(entries, desc="Building dataset from images"):
     continue
 
   for face in faces:
-    for i in range(10):
-      face = retina.cvutil.rotate_image(face, 10 - (random.random() * 20))
-      canvas = cv.cvtColor(face, cv.COLOR_GRAY2BGR)
-      landmark = retina.face.extract_face_landmarks(face, canvas=canvas)
+    # for i in range(10):
+      # face = retina.cvutil.rotate_image(face, 10 - (random.random() * 20))
+    canvas = cv.cvtColor(face, cv.COLOR_GRAY2BGR)
+    landmark = retina.face.extract_face_landmarks(face, canvas=canvas)
 
-      retina.debug.imdebug(canvas)
+    retina.debug.imdebug(canvas)
 
-      list_data.append(landmark)
-      list_labels.append(entry.label.value)
+    list_data.append(landmark)
+    list_labels.append(entry.label.value)
   
 if len(list_data) == 0:
   print(f"{Ansi.Error}No images were successfully processed into the dataset.{Ansi.End}")
