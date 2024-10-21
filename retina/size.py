@@ -62,6 +62,9 @@ class Point:
   def normalized(self, dims: "Dimension")->"FloatingPoint":
     return FloatingPoint(self.x / dims.width, self.y / dims.height)
   
+  @staticmethod
+  def from_tuple(src: Union[Tuple[int, int], npt.NDArray]):
+    return Point(src[0], src[1])
   
 
 @dataclass
@@ -270,7 +273,7 @@ class Rectangle:
   def tuple(self)->tuple[int,int,int,int]:
     return (self.x0, self.y0, self.width, self.height)
 
-STANDARD_DIMENSIONS = Dimension(240, 240)
+STANDARD_DIMENSIONS = Dimension(200, 200)
+FACE_DIMENSIONS = Dimension(120, 120)
 PREVIEW_DIMENSIONS = Dimension(500, 500)
-FACE_DIMENSIONS = Dimension(48, 48)
 

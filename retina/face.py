@@ -131,16 +131,41 @@ def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
     dims=Dimension.from_shape(img.shape)
   )
 
-def face_lbp(img: cv.typing.MatLike)->npt.NDArray:
-  dims = Dimension.from_shape(img.shape)
-  rects = dims.partition(7, 7)
+def face_lbp(img: cv.typing.MatLike, landmark: FaceLandmark, *, canvas: Optional[cv.typing.MatLike] = None)->npt.NDArray:
+  prominent_points = [
+    landmark.eyes[0], # left eye left corner
+    landmark.eyes[3], # left eye right corner
+    landmark.eyes[6], # right eye left corner
+    landmark.eyes[9], # right eye right corner
+    landmark.eyebrows[0], # Eyebrow left left corner,
+    landmark.eyebrows[4], # Eyebrow left right corner,
+    landmark.eyebrows[-4], # Eyebrow right left corner,
+    landmark.eyebrows[-1], # Eyebrow right right corner
+    landmark.lips[0], # Lips left corner
+    landmark.lips[6], # Lips right corner
+    landmark.lips[3], # Lips top corner
+    landmark.lips[9], # Lips bottom corner
+  ]
+  prominent_rects = tuple(map(
+    lambda x: Rectangle.around(Point(int(x[0]), int(x[1])), Dimension(12, 12)),
+    prominent_points
+  ))
+
+  if canvas is not None:
+    canvas[:, :] = retina.debug.draw_rectangles(canvas, prominent_rects)
   
   histograms: list[npt.NDArray] = []
-  for rect in rects:
+  BIN_COUNT = 10
+  for rect in prominent_rects:
     chunk = img[rect.slice]
-    radius = 2
-    lbp = skimage.feature.local_binary_pattern(chunk, 8 * radius, radius)
-    histograms.append(scipy.ndimage.histogram(lbp, 0, 255, 10))
+    radius = 1
+
+    if chunk.size == 0:
+      histograms.append(np.full((BIN_COUNT,), 0))
+      continue
+    lbp: npt.NDArray = skimage.feature.local_binary_pattern(chunk, 8 * radius, radius)
+    histograms.append(scipy.ndimage.histogram(lbp, 0, 255, BIN_COUNT) / lbp.size)
+
   
   return np.hstack(histograms)
 
@@ -151,6 +176,11 @@ class FacialExpressionLabel(Enum):
   Neutral = 3
   Sad = 4
   Surprised = 5
+
+  @staticmethod
+  def target_names():
+    return tuple(map(lambda x: x.name, sorted(FacialExpressionLabel.__members__.values(), key=lambda x: x.value)))
+
 
 
 FACIAL_EXPRESSION_MAPPER: dict[str, FacialExpressionLabel] = {
@@ -201,11 +231,10 @@ def extract_face_landmarks(img: cv.typing.MatLike, *, canvas: Optional[cv.typing
   face = cv.filter2D(img, -1, retina.convolution.SHARPEN_KERNEL)
   face_landmarks = retina.face.face_landmark_detection(face)
   
-  feature_vector = face_landmarks.as_feature_vector()
   if canvas is not None:
     face_landmarks.draw_on(canvas, offset=offset)
 
-  return feature_vector
+  return face_landmarks
 
 LANDMARK_FEATURE_DIMENSIONS = 50
 TEXTURE_FEATURE_DIMENSIONS = 50
@@ -231,20 +260,14 @@ def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike]
 
   faces, face_rects = extract_faces(img, canvas=canvas)
 
-  landmarks: list[npt.NDArray] = []
+  features: list[npt.NDArray] = []
   for face, face_rect in zip(faces, face_rects):
+    face = cv.resize(face, retina.size.FACE_DIMENSIONS.tuple, interpolation=cv.INTER_CUBIC)
     landmark = extract_face_landmarks(face, canvas=canvas, offset=face_rect.p0)
-    landmarks.append(landmark)
+    feature_vector = face_lbp(face, landmark, canvas=canvas)
+    features.append(feature_vector)
 
-  if len(landmarks) == 0:
+  if len(features) == 0:
     return None
   
-  landmark_pca_model = get_landmark_pca_model()
-  landmark_feature_vectors = landmark_pca_model.transform(np.array(landmarks))
-
-
-  lbp_features = face_lbp(img)
-  texture_pca_model = get_texture_pca_model()
-  texture_feature_vectors = texture_pca_model.transform(lbp_features)
-    
-  return np.hstack([landmark_feature_vectors, texture_feature_vectors])
+  return np.array(features)
