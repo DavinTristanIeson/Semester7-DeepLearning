@@ -88,14 +88,6 @@ if len(list_data) == 0:
 data = np.array(list_data)
 labels = np.array(list_labels).reshape((-1, 1))
 
-pca = sklearn.decomposition.PCA(retina.face.FEATURE_DIMENSIONS)
-data = pca.fit_transform(data) # type: ignore
-
-if not os.path.exists(retina.filesys.MODEL_DIR_PATH):
-  os.mkdir(retina.filesys.MODEL_DIR_PATH)
-with open(retina.filesys.PCA_MODEL_PATH, 'wb') as f:
-  pickle.dump(pca, f)
-
 dfdata = np.hstack((labels, data))
 
 df = pd.DataFrame(dfdata, columns=[
