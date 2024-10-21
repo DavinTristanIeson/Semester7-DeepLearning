@@ -186,7 +186,7 @@ class Rectangle:
     )
   @property
   def slice(self)->tuple[slice, slice]:
-    return slice(self.y0, self.y0 + self.height), slice(self.x0, self.x0 + self.width)
+    return slice(int(self.y0), int(self.y0 + self.height)), slice(int(self.x0), int(self.x0 + self.width))
   @property
   def dimensions(self)->Dimension:
     return Dimension(self.width, self.height)
@@ -237,6 +237,10 @@ class Rectangle:
     )
   def translate(self, dx: int, dy: int)->"Rectangle":
     return Rectangle(self.x0 + dx, self.y0 + dy, self.x1 + dx, self.y1 + dy)
+  
+  def expand(self, dx: int, dy: int)->"Rectangle":
+    return Rectangle(self.x0 - dx, self.y0 - dy, self.x1 + dx, self.y1 + dy)
+  
   def intersection(self, other: "Rectangle")->"Rectangle":
     # https://machinelearningspace.com/intersection-over-union-iou-a-comprehensive-guide/
     return Rectangle(
@@ -273,7 +277,18 @@ class Rectangle:
   def tuple(self)->tuple[int,int,int,int]:
     return (self.x0, self.y0, self.width, self.height)
 
-STANDARD_DIMENSIONS = Dimension(200, 200)
+  @staticmethod
+  def min_bbox(points: npt.NDArray):
+    x0 = x1 = points[0][0]
+    y0 = y1 = points[0][1]
+    for point in points:
+      x0 = min(x0, point[0])
+      y0 = min(y0, point[1])
+      x1 = max(x1, point[0])
+      y1 = max(y1, point[1])
+    return Rectangle(x0, y0, x1, y1)
+
+STANDARD_DIMENSIONS = Dimension(240, 240)
 FACE_DIMENSIONS = Dimension(120, 120)
 PREVIEW_DIMENSIONS = Dimension(500, 500)
 

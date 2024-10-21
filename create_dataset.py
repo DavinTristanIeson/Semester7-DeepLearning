@@ -55,9 +55,6 @@ for folder in os.scandir(retina.filesys.DATA_DIR_PATH):
     retina.filesys.get_files_in_folder(folder.path)
   ))
 
-
-# To be considered
-
 list_data: list[npt.NDArray] = []
 list_labels: list[int] = []
 for entry in tqdm.tqdm(entries, desc="Building dataset from images"):
@@ -74,7 +71,6 @@ for entry in tqdm.tqdm(entries, desc="Building dataset from images"):
     canvas = cv.cvtColor(face, cv.COLOR_GRAY2BGR)
     landmark = retina.face.extract_face_landmarks(face, canvas=canvas)
     texture = retina.face.face_lbp(face, landmark, canvas=canvas)
-
     retina.debug.imdebug(canvas)
 
     list_data.append(texture)
@@ -84,19 +80,18 @@ if len(list_data) == 0:
   print(f"{Ansi.Error}No images were successfully processed into the dataset.{Ansi.End}")
   exit(1)
 
-
 data = np.array(list_data)
+# Normalization
+data = data / data.sum(axis=1).reshape((-1, 1))
 
 labels = np.array(list_labels).reshape((-1, 1))
 
-if not os.path.exists(retina.filesys.MODEL_DIR_PATH):
-  os.mkdir(retina.filesys.MODEL_DIR_PATH)
-
 dfdata = np.hstack((labels, data))
+
 
 df = pd.DataFrame(dfdata, columns=[
   "label",
-  *map(lambda idx: f'texture-{idx + 1}', range(data.shape[1]))
+  *map(lambda idx: f'texture-{idx + 1}', range(data.shape[1])),
 ])
 
 df.to_csv(retina.filesys.TRAINING_DATA_CSV_PATH, index=False)

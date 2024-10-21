@@ -65,11 +65,11 @@ def many_face_landmark_detection(img: cv.typing.MatLike, faces: Sequence[Rectang
 
 @dataclass
 class FaceLandmark:
-  face_shape: list[npt.NDArray]
-  eyes: list[npt.NDArray]
-  eyebrows: list[npt.NDArray]
-  nose: list[npt.NDArray]
-  lips: list[npt.NDArray]
+  face_shape: npt.NDArray
+  eyes: npt.NDArray
+  eyebrows: npt.NDArray
+  nose: npt.NDArray
+  lips: npt.NDArray
   dims: Dimension
 
   
@@ -120,7 +120,7 @@ def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
   landmark_detector = get_face_landmark_detector()
   _, face_landmarks = landmark_detector.fit(img, np.array(((0, 0, img.shape[0], img.shape[1]),)))
 
-  points: list[npt.NDArray] = face_landmarks[0][0]
+  points: npt.NDArray = face_landmarks[0][0]
 
   return FaceLandmark(
     face_shape=points[:17],
