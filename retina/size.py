@@ -112,6 +112,8 @@ class Dimension:
     return point.x == 0 or point.x == self.width + offset or point.y == 0 or point.y == self.height + offset
   def scale(self, scale: float)->"Dimension":
     return Dimension(int(self.width * scale), int(self.height * scale))
+  def sample(self, x: float, y: float)->Point:
+    return Point(int(self.width * x), int(self.height * y))
   
   def partition(self, rows: int, cols: int)->list["Rectangle"]:
     row_delta = int(self.width / rows)

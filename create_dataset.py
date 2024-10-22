@@ -70,7 +70,8 @@ for entry in tqdm.tqdm(entries, desc="Building dataset from images"):
     face = cv.resize(face, retina.size.FACE_DIMENSIONS.tuple, interpolation=cv.INTER_CUBIC)
     canvas = cv.cvtColor(face, cv.COLOR_GRAY2BGR)
     landmark = retina.face.extract_face_landmarks(face, canvas=canvas)
-    texture = retina.face.face_lbp(face, landmark, canvas=canvas)
+    face = retina.face.face_alignment(face, landmark)
+    texture = retina.face.grid_lbp(face)
     retina.debug.imdebug(canvas)
 
     list_data.append(texture)

@@ -131,35 +131,13 @@ def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
     dims=Dimension.from_shape(img.shape)
   )
 
-def face_lbp(img: cv.typing.MatLike, landmark: FaceLandmark, *, canvas: Optional[cv.typing.MatLike] = None, offset: Optional[Point] = None)->npt.NDArray:
-  # prominent_points = [
-  #   landmark.eyes[0], # left eye left corner
-  #   landmark.eyes[3], # left eye right corner
-  #   landmark.eyes[6], # right eye left corner
-  #   landmark.eyes[9], # right eye right corner
-  #   landmark.eyebrows[0], # Eyebrow left left corner,
-  #   landmark.eyebrows[4], # Eyebrow left right corner,
-  #   landmark.eyebrows[-4], # Eyebrow right left corner,
-  #   landmark.eyebrows[-1], # Eyebrow right right corner
-  #   landmark.lips[0], # Lips left corner
-  #   landmark.lips[6], # Lips right corner
-  #   landmark.lips[3], # Lips top corner
-  #   landmark.lips[9], # Lips bottom corner
-  # ]
-  # prominent_rects = tuple(map(
-  #   lambda x: Rectangle.around(Point(int(x[0]), int(x[1])), Dimension(12, 12)),
-  #   prominent_points
-  # ))
-
-  dims = Dimension.from_shape(img.shape)
-  prominent_rects = dims.partition(7, 7)
-
+def lbp_histograms(img: cv.typing.MatLike, rectangles: Sequence[Rectangle], *, canvas: Optional[cv.typing.MatLike] = None, offset: Optional[Point] = None)->npt.NDArray:
   if canvas is not None:
-    retina.debug.draw_rectangles(canvas, prominent_rects, offset=offset)
+    retina.debug.draw_rectangles(canvas, rectangles, offset=offset)
   
   histograms: list[npt.NDArray] = []
   BIN_COUNT = 10
-  for rect in prominent_rects:
+  for rect in rectangles:
     chunk = img[rect.slice]
     radius = 1
 
@@ -169,8 +147,33 @@ def face_lbp(img: cv.typing.MatLike, landmark: FaceLandmark, *, canvas: Optional
     lbp: npt.NDArray = skimage.feature.local_binary_pattern(chunk, 8 * radius, radius)
     histograms.append(scipy.ndimage.histogram(lbp, 0, 255, BIN_COUNT) / lbp.size)
 
-  
   return np.hstack(histograms)
+
+def face_lbp(img: cv.typing.MatLike, landmark: FaceLandmark, *, canvas: Optional[cv.typing.MatLike] = None, offset: Optional[Point] = None):
+  prominent_points = [
+    landmark.eyes[0], # left eye left corner
+    landmark.eyes[3], # left eye right corner
+    landmark.eyes[6], # right eye left corner
+    landmark.eyes[9], # right eye right corner
+    landmark.eyebrows[0], # Eyebrow left left corner,
+    landmark.eyebrows[4], # Eyebrow left right corner,
+    landmark.eyebrows[-4], # Eyebrow right left corner,
+    landmark.eyebrows[-1], # Eyebrow right right corner
+    landmark.lips[0], # Lips left corner
+    landmark.lips[6], # Lips right corner
+    landmark.lips[3], # Lips top corner
+    landmark.lips[9], # Lips bottom corner
+  ]
+  prominent_rects = tuple(map(
+    lambda x: Rectangle.around(Point(int(x[0]), int(x[1])), Dimension(12, 12)),
+    prominent_points
+  ))
+  return lbp_histograms(img, prominent_rects, canvas=canvas, offset=offset)
+
+def grid_lbp(img: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None, offset: Optional[Point] = None):
+  dims = Dimension.from_shape(img.shape)
+  grid_rects = dims.partition(7, 7)
+  return lbp_histograms(img, grid_rects, canvas=canvas, offset=offset)
 
 class FacialExpressionLabel(Enum):
   Angry = 0
@@ -229,6 +232,33 @@ def extract_faces(img: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike]
       cv.rectangle(canvas, facepos.tuple, (0, 255, 0), 1)
   return saved_faces, saved_face_positions
 
+def face_alignment(img: cv.typing.MatLike, landmark: FaceLandmark):
+  # https://pyimagesearch.com/2017/05/22/face-alignment-with-opencv-and-python/
+  desired_left_eye = retina.size.FACE_DIMENSIONS.sample(0.22, 0.25)
+  desired_right_eye_x = retina.size.FACE_DIMENSIONS.width - desired_left_eye.x
+
+  left_eye_avg = landmark.eyes[0:6].mean(axis=0)
+  right_eye_avg = landmark.eyes[6:].mean(axis=0)
+
+  delta = right_eye_avg - left_eye_avg
+  angle = np.degrees(np.arctan2(delta[1], delta[0]))
+
+  dist = np.sqrt(delta[0] ** 2 + delta[1] ** 2)
+  desired_dist = desired_right_eye_x - desired_left_eye.x
+  scale = desired_dist / dist
+
+  eyes_center = np.array([left_eye_avg, right_eye_avg]).mean(axis=0)
+  rotation_matrix = cv.getRotationMatrix2D(eyes_center, angle, scale)
+
+  translation_x = retina.size.FACE_DIMENSIONS.width * 0.5
+  translation_y = desired_left_eye.y
+  rotation_matrix[0, 2] += (translation_x - eyes_center[0])
+  rotation_matrix[1, 2] += (translation_y - eyes_center[1])
+
+  img = cv.warpAffine(img, rotation_matrix, retina.size.FACE_DIMENSIONS.tuple, flags=cv.INTER_CUBIC)
+
+  return img
+
 def extract_face_landmarks(img: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None, offset: Point = Point(0, 0)):
   face = cv.filter2D(img, -1, retina.convolution.GAUSSIAN_3X3_KERNEL)
   face = cv.filter2D(img, -1, retina.convolution.SHARPEN_KERNEL)
@@ -250,7 +280,8 @@ def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike]
   for face, face_rect in zip(faces, face_rects):
     face = cv.resize(face, retina.size.FACE_DIMENSIONS.tuple, interpolation=cv.INTER_CUBIC)
     landmark = extract_face_landmarks(face, canvas=canvas, offset=face_rect.p0)
-    feature_vector = face_lbp(face, landmark, canvas=canvas, offset=face_rect.p0)
+    face = face_alignment(face, landmark)
+    feature_vector = grid_lbp(face)
     features.append(feature_vector)
 
   if len(features) == 0:
