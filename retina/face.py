@@ -131,28 +131,31 @@ def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
     dims=Dimension.from_shape(img.shape)
   )
 
-def face_lbp(img: cv.typing.MatLike, landmark: FaceLandmark, *, canvas: Optional[cv.typing.MatLike] = None)->npt.NDArray:
-  prominent_points = [
-    landmark.eyes[0], # left eye left corner
-    landmark.eyes[3], # left eye right corner
-    landmark.eyes[6], # right eye left corner
-    landmark.eyes[9], # right eye right corner
-    landmark.eyebrows[0], # Eyebrow left left corner,
-    landmark.eyebrows[4], # Eyebrow left right corner,
-    landmark.eyebrows[-4], # Eyebrow right left corner,
-    landmark.eyebrows[-1], # Eyebrow right right corner
-    landmark.lips[0], # Lips left corner
-    landmark.lips[6], # Lips right corner
-    landmark.lips[3], # Lips top corner
-    landmark.lips[9], # Lips bottom corner
-  ]
-  prominent_rects = tuple(map(
-    lambda x: Rectangle.around(Point(int(x[0]), int(x[1])), Dimension(12, 12)),
-    prominent_points
-  ))
+def face_lbp(img: cv.typing.MatLike, landmark: FaceLandmark, *, canvas: Optional[cv.typing.MatLike] = None, offset: Optional[Point] = None)->npt.NDArray:
+  # prominent_points = [
+  #   landmark.eyes[0], # left eye left corner
+  #   landmark.eyes[3], # left eye right corner
+  #   landmark.eyes[6], # right eye left corner
+  #   landmark.eyes[9], # right eye right corner
+  #   landmark.eyebrows[0], # Eyebrow left left corner,
+  #   landmark.eyebrows[4], # Eyebrow left right corner,
+  #   landmark.eyebrows[-4], # Eyebrow right left corner,
+  #   landmark.eyebrows[-1], # Eyebrow right right corner
+  #   landmark.lips[0], # Lips left corner
+  #   landmark.lips[6], # Lips right corner
+  #   landmark.lips[3], # Lips top corner
+  #   landmark.lips[9], # Lips bottom corner
+  # ]
+  # prominent_rects = tuple(map(
+  #   lambda x: Rectangle.around(Point(int(x[0]), int(x[1])), Dimension(12, 12)),
+  #   prominent_points
+  # ))
+
+  dims = Dimension.from_shape(img.shape)
+  prominent_rects = dims.partition(7, 7)
 
   if canvas is not None:
-    canvas[:, :] = retina.debug.draw_rectangles(canvas, prominent_rects)
+    retina.debug.draw_rectangles(canvas, prominent_rects, offset=offset)
   
   histograms: list[npt.NDArray] = []
   BIN_COUNT = 10
@@ -236,23 +239,6 @@ def extract_face_landmarks(img: cv.typing.MatLike, *, canvas: Optional[cv.typing
 
   return face_landmarks
 
-LANDMARK_FEATURE_DIMENSIONS = 50
-TEXTURE_FEATURE_DIMENSIONS = 50
-
-@lru_cache(maxsize=1)
-def get_landmark_pca_model()->sklearn.decomposition.PCA:
-  if not os.path.exists(retina.filesys.LANDMARK_PCA_MODEL_PATH):
-    raise Exception("Model has not been trained yet.")
-  with open(retina.filesys.LANDMARK_PCA_MODEL_PATH, 'rb') as f:
-    return pickle.load(f)
-  
-@lru_cache(maxsize=1)
-def get_texture_pca_model()->sklearn.decomposition.PCA:
-  if not os.path.exists(retina.filesys.TEXTURE_PCA_MODEL_PATH):
-    raise Exception("Model has not been trained yet.")
-  with open(retina.filesys.TEXTURE_PCA_MODEL_PATH, 'rb') as f:
-    return pickle.load(f)
-
 def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None)->Optional[npt.NDArray]:
   img = retina.cvutil.resize_image(original, retina.size.STANDARD_DIMENSIONS) # Resize
   img = cv.cvtColor(img, cv.COLOR_BGR2GRAY) # Grayscale
@@ -264,7 +250,7 @@ def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike]
   for face, face_rect in zip(faces, face_rects):
     face = cv.resize(face, retina.size.FACE_DIMENSIONS.tuple, interpolation=cv.INTER_CUBIC)
     landmark = extract_face_landmarks(face, canvas=canvas, offset=face_rect.p0)
-    feature_vector = face_lbp(face, landmark, canvas=canvas)
+    feature_vector = face_lbp(face, landmark, canvas=canvas, offset=face_rect.p0)
     features.append(feature_vector)
 
   if len(features) == 0:
