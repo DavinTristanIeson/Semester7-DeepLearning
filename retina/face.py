@@ -136,7 +136,7 @@ def lbp_histograms(img: cv.typing.MatLike, rectangles: Sequence[Rectangle], *, c
     retina.debug.draw_rectangles(canvas, rectangles, offset=offset)
   
   histograms: list[npt.NDArray] = []
-  BIN_COUNT = 10
+  BIN_COUNT = 6
   for rect in rectangles:
     chunk = img[rect.slice]
     radius = 1
@@ -172,7 +172,7 @@ def face_lbp(img: cv.typing.MatLike, landmark: FaceLandmark, *, canvas: Optional
 
 def grid_lbp(img: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None, offset: Optional[Point] = None):
   dims = Dimension.from_shape(img.shape)
-  grid_rects = dims.partition(7, 7)
+  grid_rects = dims.partition(8, 8)
   return lbp_histograms(img, grid_rects, canvas=canvas, offset=offset)
 
 class FacialExpressionLabel(Enum):
