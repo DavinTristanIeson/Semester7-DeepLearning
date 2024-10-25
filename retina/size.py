@@ -36,7 +36,7 @@ class Point:
   def tuple(self)->tuple[int, int]:
     return (int(self.x), int(self.y))
   @property
-  def nparray(self)->npt.NDArray:
+  def ndarray(self)->npt.NDArray:
     return np.array(self.tuple)
   @property
   def as_cell(self)->Tuple[int, int]:
@@ -66,6 +66,10 @@ class Point:
   def from_tuple(src: Union[Tuple[int, int], npt.NDArray]):
     return Point(src[0], src[1])
   
+  def project_to(self, from_rect: "Rectangle", to_rect: "Rectangle")->"Point":
+    x_new = int(self.x * to_rect.width / from_rect.width)
+    y_new = int(self.y * to_rect.height / from_rect.height)
+    return Point(x_new, y_new)
 
 @dataclass
 class Dimension:
@@ -74,6 +78,9 @@ class Dimension:
   @property
   def tuple(self)->tuple[int, int]:
     return (self.width, self.height)
+  @property
+  def ndarray(self)->npt.NDArray:
+    return np.array((self.width, self.height))
   @property
   def area(self):
     return self.width * self.height

@@ -2,8 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
 import os
-import pickle
-from typing import ClassVar, Optional, Sequence
+from typing import ClassVar, Optional, Sequence, cast
 
 import scipy.ndimage
 import cv2 as cv
@@ -14,12 +13,10 @@ import numpy as np
 import numpy.typing as npt
 import scipy
 import scipy.spatial
-import sklearn
-import sklearn.decomposition
 
 import retina
 from retina.log import Ansi
-from retina.size import Dimension, FloatingPoint, Point, Rectangle
+from retina.size import Dimension, Point, Rectangle
 
 CASCADE_CLASSIFIER_PATH = "retina/haarcascade_frontalface_default.xml"
 
@@ -30,7 +27,7 @@ def get_face_haar_classifier():
 def haar_detect(img: cv.typing.MatLike)->Sequence[Rectangle]:
   # Source: https://towardsdatascience.com/face-detection-in-2-minutes-using-opencv-python-90f89d7c0f81
   face_cascade = get_face_haar_classifier()
-  face_coordinates = face_cascade.detectMultiScale(img, 1.1, 4)
+  face_coordinates = face_cascade.detectMultiScale(img)
 
   rectangles = list(Rectangle.from_tuple(coords) for coords in face_coordinates)
   rectangles.sort(key=lambda x: x.area)
@@ -102,18 +99,24 @@ class FaceLandmark:
   NOSE_COLOR: ClassVar[tuple[int, int, int]] = (255, 0, 0)
   FACE_SHAPE_COLOR: ClassVar[tuple[int, int, int]] = (255, 255, 0)
   EYEBROW_COLOR: ClassVar[tuple[int, int, int]] = (0, 255, 255)
-  def draw_on(self, img: cv.typing.MatLike, *, offset: Point = Point(0, 0)):
-    offsetnp = offset.nparray
+
+  def project_point(self, point: npt.NDArray, rect: Optional[Rectangle] = None)->Sequence[int]:
+    if rect is None:
+      return cast(Sequence[int], point.astype(np.int32))
+    projected_point = point * rect.dimensions.ndarray / self.dims.ndarray
+    return cast(Sequence[int], (projected_point + rect.p0.ndarray).astype(np.int32))
+  
+  def draw_on(self, img: cv.typing.MatLike, *, offset: Optional[Rectangle] = None):
     for point in self.eyes:
-      cv.circle(img, tuple(point.astype(np.int32) + offsetnp), 1, self.EYE_COLOR, -1)
+      cv.circle(img, self.project_point(point, offset), 1, self.EYE_COLOR, -1)
     for point in self.lips:
-      cv.circle(img, tuple(point.astype(np.int32) + offsetnp), 1, self.LIP_COLOR, -1)
+      cv.circle(img, self.project_point(point, offset), 1, self.LIP_COLOR, -1)
     for point in self.nose:
-      cv.circle(img, tuple(point.astype(np.int32) + offsetnp), 1, self.NOSE_COLOR, -1)
+      cv.circle(img, self.project_point(point, offset), 1, self.NOSE_COLOR, -1)
     for point in self.face_shape:
-      cv.circle(img, tuple(point.astype(np.int32) + offsetnp), 1, self.FACE_SHAPE_COLOR, -1)
+      cv.circle(img, self.project_point(point, offset), 1, self.FACE_SHAPE_COLOR, -1)
     for point in self.eyebrows:
-      cv.circle(img, tuple(point.astype(np.int32) + offsetnp), 1, self.EYEBROW_COLOR, -1)
+      cv.circle(img, self.project_point(point, offset), 1, self.EYEBROW_COLOR, -1)
 
 def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
   # Source: https://towardsdatascience.com/face-detection-in-2-minutes-using-opencv-python-90f89d7c0f81
@@ -131,9 +134,9 @@ def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
     dims=Dimension.from_shape(img.shape)
   )
 
-def lbp_histograms(img: cv.typing.MatLike, rectangles: Sequence[Rectangle], *, canvas: Optional[cv.typing.MatLike] = None, offset: Optional[Point] = None)->npt.NDArray:
+def lbp_histograms(img: cv.typing.MatLike, rectangles: Sequence[Rectangle], *, canvas: Optional[cv.typing.MatLike] = None, offset: Optional[Rectangle] = None)->npt.NDArray:
   if canvas is not None:
-    retina.debug.draw_rectangles(canvas, rectangles, offset=offset)
+    retina.debug.draw_rectangles(canvas, rectangles, offset=offset.p0 if offset else None)
   
   histograms: list[npt.NDArray] = []
   BIN_COUNT = 6
@@ -149,7 +152,7 @@ def lbp_histograms(img: cv.typing.MatLike, rectangles: Sequence[Rectangle], *, c
 
   return np.hstack(histograms)
 
-def face_lbp(img: cv.typing.MatLike, landmark: FaceLandmark, *, canvas: Optional[cv.typing.MatLike] = None, offset: Optional[Point] = None):
+def face_lbp(img: cv.typing.MatLike, landmark: FaceLandmark, *, canvas: Optional[cv.typing.MatLike] = None, offset: Optional[Rectangle] = None):
   prominent_points = [
     landmark.eyes[0], # left eye left corner
     landmark.eyes[3], # left eye right corner
@@ -170,7 +173,7 @@ def face_lbp(img: cv.typing.MatLike, landmark: FaceLandmark, *, canvas: Optional
   ))
   return lbp_histograms(img, prominent_rects, canvas=canvas, offset=offset)
 
-def grid_lbp(img: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None, offset: Optional[Point] = None):
+def grid_lbp(img: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None, offset: Optional[Rectangle] = None):
   dims = Dimension.from_shape(img.shape)
   grid_rects = dims.partition(8, 8)
   return lbp_histograms(img, grid_rects, canvas=canvas, offset=offset)
@@ -182,11 +185,6 @@ class FacialExpressionLabel(Enum):
   Neutral = 3
   Sad = 4
   Surprised = 5
-  
-  @staticmethod
-  def target_names():
-    return tuple(map(lambda x: x.name, sorted(FacialExpressionLabel.__members__.values(), key=lambda x: x.value)))
-
 
   @staticmethod
   def target_names():
@@ -264,7 +262,7 @@ def face_alignment(img: cv.typing.MatLike, landmark: FaceLandmark):
 
   return img
 
-def extract_face_landmarks(img: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None, offset: Point = Point(0, 0)):
+def extract_face_landmarks(img: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None, offset: Optional[Rectangle] = None):
   face = cv.filter2D(img, -1, retina.convolution.GAUSSIAN_3X3_KERNEL)
   face = cv.filter2D(img, -1, retina.convolution.SHARPEN_KERNEL)
   face_landmarks = retina.face.face_landmark_detection(face)
@@ -274,19 +272,24 @@ def extract_face_landmarks(img: cv.typing.MatLike, *, canvas: Optional[cv.typing
 
   return face_landmarks
 
-def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None)->Optional[npt.NDArray]:
+def preprocess_face_image(original: cv.typing.MatLike):
   img = retina.cvutil.resize_image(original, retina.size.STANDARD_DIMENSIONS) # Resize
   img = cv.cvtColor(img, cv.COLOR_BGR2GRAY) # Grayscale
   img = retina.colors.clahe(img) # Contrast adjustment
+  return img
 
+def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None)->Optional[npt.NDArray]:
+  img = preprocess_face_image(original)
   faces, face_rects = extract_faces(img, canvas=canvas)
 
   features: list[npt.NDArray] = []
   for face, face_rect in zip(faces, face_rects):
     face = cv.resize(face, retina.size.FACE_DIMENSIONS.tuple, interpolation=cv.INTER_CUBIC)
-    landmark = extract_face_landmarks(face, canvas=canvas, offset=face_rect.p0)
+    face = cv.filter2D(face, -1, retina.convolution.GAUSSIAN_3X3_KERNEL)
+    landmark = extract_face_landmarks(face, canvas=canvas, offset=face_rect)
     face = face_alignment(face, landmark)
     feature_vector = grid_lbp(face)
+    feature_vector = feature_vector / feature_vector.sum() # Normalization
     features.append(feature_vector)
 
   if len(features) == 0:
