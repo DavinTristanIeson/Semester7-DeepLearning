@@ -55,9 +55,6 @@ for folder in os.scandir(retina.filesys.DATA_DIR_PATH):
     retina.filesys.get_files_in_folder(folder.path)
   ))
 
-
-# To be considered
-
 list_data: list[npt.NDArray] = []
 list_labels: list[int] = []
 for entry in tqdm.tqdm(entries, desc="Building dataset from images"):
@@ -70,37 +67,32 @@ for entry in tqdm.tqdm(entries, desc="Building dataset from images"):
     continue
 
   for face in faces:
-    # for i in range(10):
-      # face = retina.cvutil.rotate_image(face, 10 - (random.random() * 20))
+    face = cv.resize(face, retina.size.FACE_DIMENSIONS.tuple, interpolation=cv.INTER_CUBIC)
     canvas = cv.cvtColor(face, cv.COLOR_GRAY2BGR)
     landmark = retina.face.extract_face_landmarks(face, canvas=canvas)
-
+    face = retina.face.face_alignment(face, landmark)
+    texture = retina.face.grid_lbp(face)
     retina.debug.imdebug(canvas)
 
-    list_data.append(landmark)
+    list_data.append(texture)
     list_labels.append(entry.label.value)
   
 if len(list_data) == 0:
   print(f"{Ansi.Error}No images were successfully processed into the dataset.{Ansi.End}")
   exit(1)
 
-
 data = np.array(list_data)
+# Normalization
+data = data / data.sum(axis=1).reshape((-1, 1))
+
 labels = np.array(list_labels).reshape((-1, 1))
-
-pca = sklearn.decomposition.PCA(retina.face.FEATURE_DIMENSIONS)
-data = pca.fit_transform(data) # type: ignore
-
-if not os.path.exists(retina.filesys.MODEL_DIR_PATH):
-  os.mkdir(retina.filesys.MODEL_DIR_PATH)
-with open(retina.filesys.PCA_MODEL_PATH, 'wb') as f:
-  pickle.dump(pca, f)
 
 dfdata = np.hstack((labels, data))
 
+
 df = pd.DataFrame(dfdata, columns=[
   "label",
-  *map(lambda idx: f'feature-{idx + 1}', range(dfdata.shape[1] - 1))
+  *map(lambda idx: f'texture-{idx + 1}', range(data.shape[1])),
 ])
 
 df.to_csv(retina.filesys.TRAINING_DATA_CSV_PATH, index=False)

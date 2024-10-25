@@ -38,10 +38,12 @@ def matshow(matrix: npt.NDArray, *, area: Optional[Rectangle] = None, condition:
       str_row.append(f"{modifier}{str_cell}{Ansi.End}")
     print(' '.join(str_row))
 
-def draw_rectangles(img: cv.typing.MatLike, rectangles: Iterable[Rectangle]):
+def draw_rectangles(img: cv.typing.MatLike, rectangles: Iterable[Rectangle], offset: Optional[Point] = None):
   if img.ndim == 2:
     img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
   for rect in rectangles:
+    if offset is not None:
+      rect = rect.translate(offset.x, offset.y)
     cv.rectangle(img, rect.p0.tuple, rect.p1.tuple, color=(0, 255, 0))
   return img
 

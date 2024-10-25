@@ -62,6 +62,9 @@ class Point:
   def normalized(self, dims: "Dimension")->"FloatingPoint":
     return FloatingPoint(self.x / dims.width, self.y / dims.height)
   
+  @staticmethod
+  def from_tuple(src: Union[Tuple[int, int], npt.NDArray]):
+    return Point(src[0], src[1])
   
 
 @dataclass
@@ -109,6 +112,21 @@ class Dimension:
     return point.x == 0 or point.x == self.width + offset or point.y == 0 or point.y == self.height + offset
   def scale(self, scale: float)->"Dimension":
     return Dimension(int(self.width * scale), int(self.height * scale))
+  def sample(self, x: float, y: float)->Point:
+    return Point(int(self.width * x), int(self.height * y))
+  
+  def partition(self, rows: int, cols: int)->list["Rectangle"]:
+    row_delta = int(self.width / rows)
+    col_delta = int(self.height / cols)
+    rects: list["Rectangle"] = []
+    for row in range(rows):
+      for col in range(cols):
+        row_start = row * row_delta
+        col_start = col * col_delta
+        rect = Rectangle(col_start, row_start, col_start + col_delta, row_start + row_delta)
+        rects.append(rect)
+    return rects
+      
   
   @staticmethod
   def blerp(image: npt.NDArray, dimensions: "Dimension")->npt.NDArray:
@@ -170,7 +188,7 @@ class Rectangle:
     )
   @property
   def slice(self)->tuple[slice, slice]:
-    return slice(self.y0, self.y0 + self.height), slice(self.x0, self.x0 + self.width)
+    return slice(int(self.y0), int(self.y0 + self.height)), slice(int(self.x0), int(self.x0 + self.width))
   @property
   def dimensions(self)->Dimension:
     return Dimension(self.width, self.height)
@@ -221,6 +239,10 @@ class Rectangle:
     )
   def translate(self, dx: int, dy: int)->"Rectangle":
     return Rectangle(self.x0 + dx, self.y0 + dy, self.x1 + dx, self.y1 + dy)
+  
+  def expand(self, dx: int, dy: int)->"Rectangle":
+    return Rectangle(self.x0 - dx, self.y0 - dy, self.x1 + dx, self.y1 + dy)
+  
   def intersection(self, other: "Rectangle")->"Rectangle":
     # https://machinelearningspace.com/intersection-over-union-iou-a-comprehensive-guide/
     return Rectangle(
@@ -257,7 +279,18 @@ class Rectangle:
   def tuple(self)->tuple[int,int,int,int]:
     return (self.x0, self.y0, self.width, self.height)
 
+  @staticmethod
+  def min_bbox(points: npt.NDArray):
+    x0 = x1 = points[0][0]
+    y0 = y1 = points[0][1]
+    for point in points:
+      x0 = min(x0, point[0])
+      y0 = min(y0, point[1])
+      x1 = max(x1, point[0])
+      y1 = max(y1, point[1])
+    return Rectangle(x0, y0, x1, y1)
+
 STANDARD_DIMENSIONS = Dimension(240, 240)
+FACE_DIMENSIONS = Dimension(120, 120)
 PREVIEW_DIMENSIONS = Dimension(500, 500)
-FACE_DIMENSIONS = Dimension(48, 48)
 
