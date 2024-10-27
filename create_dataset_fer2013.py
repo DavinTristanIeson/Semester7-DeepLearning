@@ -24,7 +24,7 @@ import retina
 if "--unzip" in sys.argv:
   if (os.path.exists(retina.filesys.DATA_DIR_PATH)):
     shutil.rmtree(retina.filesys.DATA_DIR_PATH)
-  with zipfile.ZipFile(retina.filesys.DATASET_PATH, 'r') as zip_ref:
+  with zipfile.ZipFile("fer2013.zip", 'r') as zip_ref:
     zip_ref.extractall(retina.filesys.DATA_DIR_PATH)
 
 @dataclass
@@ -34,27 +34,30 @@ class TrainDataEntry:
 
 
 entries: list[TrainDataEntry] = []
-for folder in os.scandir(retina.filesys.DATA_DIR_PATH):
+for folder in os.scandir(os.path.join(retina.filesys.DATA_DIR_PATH, "test")):
   if not folder.is_dir():
     continue
+
   try:
-    expression = FacialExpressionLabels.Ours.index(folder.name)
+    expression = FacialExpressionLabels.Fer2013.index(folder.name)
   except ValueError:
     print(f"{Ansi.Error}Skipping the inclusion of {folder.name} in the dataset.{Ansi.End}")
     continue
+
   entries.extend(map(
     lambda fpath: TrainDataEntry(path=fpath, label=expression),
     retina.filesys.get_files_in_folder(folder.path)
   ))
 
 retina.face.get_face_landmark_detector()
+
 skipped = 0
 list_data: list[npt.NDArray] = []
 list_labels: list[int] = []
 for entry in tqdm.tqdm(entries, desc="Building dataset from images"):
   original = cv.imread(entry.path)
   canvas = cv.cvtColor(retina.face.preprocess_face_image(original), cv.COLOR_GRAY2BGR)
-  features = retina.face.face2vec(original, canvas=canvas)
+  features = retina.face.face2vec(original, canvas=canvas, skip_face_detection=True)
   retina.debug.imdebug(canvas)
   if features is None:
     print(f"\n{Ansi.Error}Skipping {entry.path} because no faces were found in the image.{Ansi.End}")

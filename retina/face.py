@@ -178,31 +178,11 @@ def grid_lbp(img: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = No
   grid_rects = dims.partition(8, 8)
   return lbp_histograms(img, grid_rects, canvas=canvas, offset=offset)
 
-class FacialExpressionLabel(Enum):
-  Angry = 0
-  Disgusted = 1
-  Happy = 2
-  Neutral = 3
-  Sad = 4
-  Surprised = 5
-
-  @staticmethod
-  def target_names():
-    return tuple(map(lambda x: x.name, sorted(FacialExpressionLabel.__members__.values(), key=lambda x: x.value)))
-
-
-
-FACIAL_EXPRESSION_MAPPER: dict[str, FacialExpressionLabel] = {
-  "angry": FacialExpressionLabel.Angry,
-  "disgusted": FacialExpressionLabel.Disgusted,
-  "happy": FacialExpressionLabel.Happy,
-  "neutral": FacialExpressionLabel.Neutral,
-  "sad": FacialExpressionLabel.Sad,
-  "surprised": FacialExpressionLabel.Surprised,
-}
-
-INVERSE_FACIAL_EXPRESSION_MAPPER: dict[FacialExpressionLabel, str] = {v:k for k, v in FACIAL_EXPRESSION_MAPPER.items()}
-
+class FacialExpressionLabels:
+  Ours = ["angry", "disgusted", "happy", "neutral", "sad", "surprised"]
+  Fer2013 = ["angry", "disgust", "fear", "happy", "neutral", "sad", "surprise"] 
+  CkPlus = ["Anger", "Disgust", "Fear", "Happiness", "Sadness", "Surprise", "Neutral", "Contempt"]
+  
 def extract_faces(img: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None)->tuple[Sequence[cv.typing.MatLike], Sequence[Rectangle]]:
   face_positions = haar_detect(img)
   faces = tuple(
@@ -274,20 +254,25 @@ def extract_face_landmarks(img: cv.typing.MatLike, *, canvas: Optional[cv.typing
 
 def preprocess_face_image(original: cv.typing.MatLike):
   img = retina.cvutil.resize_image(original, retina.size.STANDARD_DIMENSIONS) # Resize
-  img = cv.cvtColor(img, cv.COLOR_BGR2GRAY) # Grayscale
+  if img.ndim > 2:
+    img = cv.cvtColor(img, cv.COLOR_BGR2GRAY) # Grayscale
   img = retina.colors.clahe(img) # Contrast adjustment
   return img
 
-def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None)->Optional[npt.NDArray]:
+def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None, skip_face_detection: bool = False, skip_face_landmarking: bool = False)->Optional[npt.NDArray]:
   img = preprocess_face_image(original)
-  faces, face_rects = extract_faces(img, canvas=canvas)
+  if not skip_face_detection:
+    faces, face_rects = extract_faces(img, canvas=canvas)
+  else:
+    faces = [img]
+    face_rects = [Rectangle.with_dimensions(Dimension.from_shape(original.shape))]
 
   features: list[npt.NDArray] = []
   for face, face_rect in zip(faces, face_rects):
     face = cv.resize(face, retina.size.FACE_DIMENSIONS.tuple, interpolation=cv.INTER_CUBIC)
-    face = cv.filter2D(face, -1, retina.convolution.GAUSSIAN_3X3_KERNEL)
-    landmark = extract_face_landmarks(face, canvas=canvas, offset=face_rect)
-    face = face_alignment(face, landmark)
+    if not skip_face_landmarking:
+      landmark = extract_face_landmarks(face, canvas=canvas, offset=face_rect)
+      face = face_alignment(face, landmark)
     feature_vector = grid_lbp(face)
     feature_vector = feature_vector / feature_vector.sum() # Normalization
     features.append(feature_vector)

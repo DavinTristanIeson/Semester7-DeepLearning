@@ -5,7 +5,7 @@ import numpy as np
 import retina
 
 expreg_model: keras.Sequential = keras.models.load_model(retina.filesys.EXPRESSION_RECOGNITION_MODEL_PATH) # type: ignore
-class_names = sorted(retina.face.FacialExpressionLabel.__members__.values(), key=lambda x: x.value)
+class_names = retina.face.FacialExpressionLabels.Ours
 # preload all dependencies
 retina.face.get_face_haar_classifier()
 retina.face.get_face_landmark_detector()
