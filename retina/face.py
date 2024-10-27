@@ -69,29 +69,37 @@ class FaceLandmark:
   lips: npt.NDArray
   dims: Dimension
 
-  
   @property
-  def feature_points(self)->npt.NDArray:
-    return np.vstack([self.eyes, self.eyebrows, self.nose, self.lips])
+  def feature_points(self):
+    return np.vstack([
+      self.eyes[0],
+      np.array([self.eyes[1], self.eyes[2]]).mean(axis=0),
+      self.eyes[3],
+      np.array([self.eyes[4], self.eyes[5]]).mean(axis=0),
+
+      self.eyes[6],
+      np.array([self.eyes[7], self.eyes[8]]).mean(axis=0),
+      self.eyes[9],
+      np.array([self.eyes[10], self.eyes[11]]).mean(axis=0),
+
+      *self.eyebrows[0:5:2],
+      *self.eyebrows[5:10:2],
+      self.lips[0],
+      self.lips[3],
+      self.lips[6],
+      self.lips[9],
+    ])
 
   def as_feature_vector(self)->npt.NDArray:
     # https://arxiv.org/pdf/1812.04510
-    # 17 points are dedicated for the shape of the face, which we don't really need.
     normalized_points = self.feature_points / np.array((self.dims.width, self.dims.height))
     interdistance_map = scipy.spatial.distance.cdist(normalized_points, normalized_points, "euclidean").flatten()
-    # All diagonal values are excluded
-    excluded_points = np.eye(len(self.feature_points)).flatten() == 1
+    interdistance_map = np.power(interdistance_map, 2)
+    # # All diagonal values are excluded
+    excluded_points = np.eye(len(normalized_points)).flatten() == 1
 
-    # Square the interdistance map to make larger differences more prominent
-    interdistance_map = np.power(interdistance_map[~excluded_points], 2)
-
-    # Also calculate the distance to the average point in the face
-    average_point = normalized_points.mean(axis=0)
-    distances_to_center = scipy.spatial.distance.cdist(np.array([average_point]), normalized_points, "euclidean")[0]
-
-    feature_vector = np.hstack((interdistance_map, distances_to_center))
-
-    return feature_vector
+    # # Square the interdistance map to make larger differences more prominent
+    return interdistance_map.flatten()[~excluded_points]
 
 
   EYE_COLOR: ClassVar[tuple[int, int, int]] = (0, 0, 255)
