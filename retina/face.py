@@ -93,13 +93,12 @@ class FaceLandmark:
   def as_feature_vector(self)->npt.NDArray:
     # https://arxiv.org/pdf/1812.04510
     normalized_points = self.feature_points / np.array((self.dims.width, self.dims.height))
-    interdistance_map = scipy.spatial.distance.cdist(normalized_points, normalized_points, "euclidean").flatten()
+    interdistance_map = scipy.spatial.distance.cdist(normalized_points, normalized_points, "euclidean")
     interdistance_map = np.power(interdistance_map, 2)
-    # # All diagonal values are excluded
-    excluded_points = np.eye(len(normalized_points)).flatten() == 1
+    points_mask = np.tril(np.ones(interdistance_map.shape), -1).astype(np.bool_).flatten()
 
     # # Square the interdistance map to make larger differences more prominent
-    return interdistance_map.flatten()[~excluded_points]
+    return interdistance_map.flatten()[points_mask]
 
 
   EYE_COLOR: ClassVar[tuple[int, int, int]] = (0, 0, 255)
@@ -115,16 +114,18 @@ class FaceLandmark:
     return cast(Sequence[int], (projected_point + rect.p0.ndarray).astype(np.int32))
   
   def draw_on(self, img: cv.typing.MatLike, *, offset: Optional[Rectangle] = None):
-    for point in self.eyes:
+    for point in self.feature_points:
       cv.circle(img, self.project_point(point, offset), 1, self.EYE_COLOR, -1)
-    for point in self.lips:
-      cv.circle(img, self.project_point(point, offset), 1, self.LIP_COLOR, -1)
-    for point in self.nose:
-      cv.circle(img, self.project_point(point, offset), 1, self.NOSE_COLOR, -1)
-    for point in self.face_shape:
-      cv.circle(img, self.project_point(point, offset), 1, self.FACE_SHAPE_COLOR, -1)
-    for point in self.eyebrows:
-      cv.circle(img, self.project_point(point, offset), 1, self.EYEBROW_COLOR, -1)
+    # for point in self.eyes:
+    #   cv.circle(img, self.project_point(point, offset), 1, self.EYE_COLOR, -1)
+    # for point in self.lips:
+    #   cv.circle(img, self.project_point(point, offset), 1, self.LIP_COLOR, -1)
+    # for point in self.nose:
+    #   cv.circle(img, self.project_point(point, offset), 1, self.NOSE_COLOR, -1)
+    # for point in self.face_shape:
+    #   cv.circle(img, self.project_point(point, offset), 1, self.FACE_SHAPE_COLOR, -1)
+    # for point in self.eyebrows:
+    #   cv.circle(img, self.project_point(point, offset), 1, self.EYEBROW_COLOR, -1)
 
 def face_landmark_detection(img: cv.typing.MatLike)->FaceLandmark:
   # Source: https://towardsdatascience.com/face-detection-in-2-minutes-using-opencv-python-90f89d7c0f81
@@ -147,7 +148,7 @@ def lbp_histograms(img: cv.typing.MatLike, rectangles: Sequence[Rectangle], *, c
     retina.debug.draw_rectangles(canvas, rectangles, offset=offset.p0 if offset else None)
   
   histograms: list[npt.NDArray] = []
-  BIN_COUNT = 6
+  BIN_COUNT = 8
   for rect in rectangles:
     chunk = img[rect.slice]
     radius = 1
@@ -267,7 +268,7 @@ def preprocess_face_image(original: cv.typing.MatLike):
   img = retina.colors.clahe(img) # Contrast adjustment
   return img
 
-def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None, skip_face_detection: bool = False, skip_face_landmarking: bool = False)->Optional[npt.NDArray]:
+def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike] = None, skip_face_detection: bool = False)->Optional[npt.NDArray]:
   img = preprocess_face_image(original)
   if not skip_face_detection:
     faces, face_rects = extract_faces(img, canvas=canvas)
@@ -278,11 +279,12 @@ def face2vec(original: cv.typing.MatLike, *, canvas: Optional[cv.typing.MatLike]
   features: list[npt.NDArray] = []
   for face, face_rect in zip(faces, face_rects):
     face = cv.resize(face, retina.size.FACE_DIMENSIONS.tuple, interpolation=cv.INTER_CUBIC)
-    if not skip_face_landmarking:
-      landmark = extract_face_landmarks(face, canvas=canvas, offset=face_rect)
-      face = face_alignment(face, landmark)
-    feature_vector = grid_lbp(face)
-    feature_vector = feature_vector / feature_vector.sum() # Normalization
+    landmark = extract_face_landmarks(face, canvas=canvas, offset=face_rect)
+    face = face_alignment(face, landmark)
+    texture = grid_lbp(face)
+
+    # feature_vector = np.hstack([texture, landmark.as_feature_vector()])
+    feature_vector = texture
     features.append(feature_vector)
 
   if len(features) == 0:
