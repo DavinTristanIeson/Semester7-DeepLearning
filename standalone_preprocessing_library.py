@@ -2,25 +2,15 @@ from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple, Union
 import numpy.typing as npt
 import numpy as np
-import retina.math
 import math
 import cv2 as cv
 
-
-@dataclass
-class FloatingPoint:
-  x:float
-  y:float
-  @property
-  def integer(self)->"Point":
-    return Point(int(self.x), int(self.y))
-  @property
-  def tuple(self)->tuple[float, float]:
-    return (self.x, self.y) 
-  @staticmethod
-  def from_tuple(src: Tuple[int, int])->"Point":
-    return Point(src[0], src[1])
-  
+def clamp(value: int, min_value: int, max_value: int):
+  return max(min_value, min(max_value, value))
+def deg2rad(deg: float):
+  return deg * 3.14 / 180.0
+def rad2deg(rad: float):
+  return rad * 180.0 / 3.14
 
 @dataclass
 class Point:
@@ -46,7 +36,7 @@ class Point:
     return Point(col, row)
   def forward(self, angle: float, shift: float)->"Point":
     # https://stackoverflow.com/questions/22252438/draw-a-line-using-an-angle-and-a-point-in-opencv
-    angle = retina.math.deg2rad(angle)
+    angle = deg2rad(angle)
     return Point(
       int(self.x + shift * math.cos(angle)),
       int(self.y + shift * math.sin(angle))
@@ -59,8 +49,6 @@ class Point:
     return False
   def radians_to(self, point: "Point"):
     return np.arctan2(point.x - self.x, point.y - self.y)
-  def normalized(self, dims: "Dimension")->"FloatingPoint":
-    return FloatingPoint(self.x / dims.width, self.y / dims.height)
   
   @staticmethod
   def from_tuple(src: Union[Tuple[int, int], npt.NDArray]):
@@ -111,62 +99,8 @@ class Dimension:
     return Dimension(shape[1], shape[0])
   def can_encapsulate(self, rect: Union["Rectangle", "Dimension"])->bool:
     return (self.width >= rect.width and self.height >= rect.height) or (self.width >= rect.height and self.height >= rect.width)
-  def has_point(self, point: Point, *, cell = False)->bool:
-    offset = -1 if cell else 0
-    return 0 <= point.x <= self.width + offset and 0 <= point.y <= self.height + offset
-  def at_edge(self, point: Point, *, cell = False)->bool:
-    offset = -1 if cell else 0
-    return point.x == 0 or point.x == self.width + offset or point.y == 0 or point.y == self.height + offset
   def scale(self, scale: float)->"Dimension":
     return Dimension(int(self.width * scale), int(self.height * scale))
-  def sample(self, x: float, y: float)->Point:
-    return Point(int(self.width * x), int(self.height * y))
-  
-  def partition(self, rows: int, cols: int)->list["Rectangle"]:
-    row_delta = int(self.width / rows)
-    col_delta = int(self.height / cols)
-    rects: list["Rectangle"] = []
-    for row in range(rows):
-      for col in range(cols):
-        row_start = row * row_delta
-        col_start = col * col_delta
-        rect = Rectangle(col_start, row_start, col_start + col_delta, row_start + row_delta)
-        rects.append(rect)
-    return rects
-      
-  
-  @staticmethod
-  def blerp(image: npt.NDArray, dimensions: "Dimension")->npt.NDArray:
-    # https://chao-ji.github.io/jekyll/update/2018/07/19/BilinearResize.html
-    height, width = dimensions.tuple
-    img_height, img_width = image.shape[:2]
-
-    resized = np.empty([height, width])
-
-    x_ratio = float(img_width - 1) / (width - 1) if width > 1 else 0
-    y_ratio = float(img_height - 1) / (height - 1) if height > 1 else 0
-
-    for i in range(height):
-      for j in range(width):
-
-        x_l, y_l = math.floor(x_ratio * j), math.floor(y_ratio * i)
-        x_h, y_h = math.ceil(x_ratio * j), math.ceil(y_ratio * i)
-
-        x_weight = (x_ratio * j) - x_l
-        y_weight = (y_ratio * i) - y_l
-
-        a = image[y_l, x_l]
-        b = image[y_l, x_h]
-        c = image[y_h, x_l]
-        d = image[y_h, x_h]
-
-        pixel = a * (1 - x_weight) * (1 - y_weight)\
-                + b * x_weight * (1 - y_weight) + \
-                c * y_weight * (1 - x_weight) + \
-                d * x_weight * y_weight
-
-        resized[i][j] = pixel
-    return resized
 
 
 @dataclass
@@ -205,24 +139,6 @@ class Rectangle:
   @property
   def dict(self):
     return {"x0": self.x0, "y0": self.y0, "x1": self.x1, "y1": self.y1}
-  
-  def scan_cell_indices(self):
-    r = self.y0
-    while r < self.y1:
-      c = self.x0
-      while c < self.x1:
-        yield r, c
-        c += 1
-      r += 1
-  def scan_cell_1d_indices(self):
-    return (r * self.y1 + c for r, c in self.scan_cell_indices())
-
-  def has_point(self, point: Point, *, cell = False)->bool:
-    offset = -1 if cell else 0
-    return self.x0 <= point.x <= self.x1 + offset and self.y0 <= point.y <= self.y1 + offset
-  def at_edge(self, point: Point, *, cell = False)->bool:
-    offset = -1 if cell else 0
-    return point.x == self.x0 or point.x == self.x1 + offset or point.y == self.y0 or point.y == self.y1 + offset
 
   def start_zero(self)->"Rectangle":
     return Rectangle(0, 0, self.width, self.height)
@@ -239,10 +155,10 @@ class Rectangle:
       min_y = 0
       max_y = rect.height
     return Rectangle(
-      retina.math.clamp(self.x0, min_x, max_x),
-      retina.math.clamp(self.y0, min_y, max_y),
-      retina.math.clamp(self.x1, min_x, max_x),
-      retina.math.clamp(self.y1, min_y, max_y),
+      clamp(self.x0, min_x, max_x),
+      clamp(self.y0, min_y, max_y),
+      clamp(self.x1, min_x, max_x),
+      clamp(self.y1, min_y, max_y),
     )
   def translate(self, dx: int, dy: int)->"Rectangle":
     return Rectangle(self.x0 + dx, self.y0 + dy, self.x1 + dx, self.y1 + dy)
@@ -297,7 +213,22 @@ class Rectangle:
       y1 = max(y1, point[1])
     return Rectangle(x0, y0, x1, y1)
 
-STANDARD_DIMENSIONS = Dimension(240, 240)
-FACE_DIMENSIONS = Dimension(120, 120)
-PREVIEW_DIMENSIONS = Dimension(500, 500)
+def resize_image(img: cv.typing.MatLike, target_dims: Dimension):
+  dimensions = Dimension(img.shape[1], img.shape[0])\
+    .resize(width=target_dims.width, height=target_dims.height)
+  img = cv.resize(img, dimensions.tuple, interpolation=cv.INTER_LINEAR)
+  dimensions = Dimension(img.shape[1], img.shape[0])
+  rectangle = Rectangle.around(dimensions.center, target_dims)
+  return img[rectangle.slice]
 
+GAUSSIAN_3X3_KERNEL = np.array([
+  [1, 2, 1],
+  [2, 4, 2],
+  [1, 2, 1]
+], dtype=float) * (1/16)
+
+SHARPEN_KERNEL = np.array([
+  [0, -1, 0],
+  [-1, 5, -1],
+  [0, -1, 0]
+])
