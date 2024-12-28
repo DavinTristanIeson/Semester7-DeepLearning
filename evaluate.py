@@ -27,5 +27,5 @@ while cv.waitKey(5) != 27:
   labels = np.argmax(prediction, axis=1)
 
   for label in labels:
-    print(class_names[label].name, end=' ')
+    print(class_names[label], end=' ')
   print(prediction)
