@@ -9,3 +9,5 @@ tensorflow-cpu
 tqdm
 ipykernel
 pandas
+plotly
+nbformat>=4.2.0
